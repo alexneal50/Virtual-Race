@@ -22,6 +22,32 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #bar{display:flex;gap:10px;align-items:center;padding:8px;width:100%;justify-content:center;background:var(--card)}
 canvas{width:100%;max-width:1100px;height:auto;display:block}
 #res{min-height:2.4em;padding:8px;font-weight:700}
+#fin{position:fixed;inset:0;z-index:99;display:none;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;color:#fff}
+#fin.on{display:flex}
+#fin .bg{position:absolute;inset:0;background:radial-gradient(circle at 50% 40%,#1e7be8,#0a1f5c 60%,#050d2e);animation:hue 8s linear infinite}
+#fin .rays{position:absolute;left:50%;top:42%;width:250vmax;height:250vmax;margin:-125vmax 0 0 -125vmax;background:repeating-conic-gradient(rgba(255,255,255,.16) 0 10deg,transparent 10deg 20deg);animation:spin 24s linear infinite}
+#conf{position:absolute;inset:0;z-index:3;pointer-events:none}
+.ft{position:relative;z-index:2;font-size:clamp(1.8rem,6vw,4rem);font-weight:900;letter-spacing:2px;text-align:center;text-shadow:0 0 20px #ffd84d,0 0 45px #ff9d00;animation:pulse 1s ease-in-out infinite alternate}
+#pod{position:relative;z-index:2;display:flex;align-items:flex-end;gap:clamp(8px,2vw,28px);margin:22px 0}
+.card{width:clamp(105px,27vw,250px);background:linear-gradient(#fff,#c9f1ff);border-radius:18px;padding:8px 8px 12px;text-align:center;color:#06435c;opacity:0;border:5px solid #cd7f32;animation:pop .7s cubic-bezier(.2,1.6,.4,1) forwards}
+.card canvas{width:100%;height:auto;display:block}
+.card.p3{animation-delay:.3s}
+.card.p2{animation-delay:1.2s;border-color:#c0c0c0;box-shadow:0 0 25px #dfe}
+.card.p1{width:clamp(125px,33vw,310px);border-color:gold;animation:pop .7s cubic-bezier(.2,1.6,.4,1) 2.4s forwards,glow .9s ease-in-out 3.1s infinite alternate}
+.med{font-size:clamp(1.6rem,5vw,2.8rem);animation:bob 1s ease-in-out infinite alternate}
+.nm{font-size:clamp(1rem,3vw,1.9rem);font-weight:900}
+.od{display:inline-block;margin:4px 0;padding:2px 12px;border-radius:99px;background:#06435c;color:#ffd84d;font-weight:800;font-size:clamp(.9rem,2.4vw,1.4rem)}
+.pl{font-size:clamp(1.3rem,4vw,2.6rem);font-weight:900;color:#e0a800}
+.p1 .pl{background:linear-gradient(90deg,#ffd84d,#fff,#ffd84d);background-size:200%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 1.5s linear infinite;-webkit-text-stroke:1px #b88400}
+.fb{position:relative;z-index:4;display:flex;gap:12px;opacity:0;animation:fade .6s 3.6s forwards}
+@keyframes hue{to{filter:hue-rotate(360deg)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{to{transform:scale(1.07)}}
+@keyframes pop{from{opacity:0;transform:translateY(90px) scale(.5)}to{opacity:1;transform:none}}
+@keyframes glow{to{box-shadow:0 0 70px 18px gold}from{box-shadow:0 0 20px gold}}
+@keyframes bob{to{transform:translateY(-8px) rotate(6deg)}}
+@keyframes shine{to{background-position:-200% 0}}
+@keyframes fade{to{opacity:1}}
 </style>
 </head>
 <body>
@@ -48,6 +74,12 @@ canvas{width:100%;max-width:1100px;height:auto;display:block}
   <div id="res"></div>
 </section>
 
+<div id="fin">
+  <div class="bg"></div><div class="rays"></div><canvas id="conf"></canvas>
+  <div class="ft">🏁 RACE RESULT 🏁</div>
+  <div id="pod"></div>
+  <div class="fb"><button id="again">Race again</button><button id="fmenu">Menu</button><button id="fclose">View track</button></div>
+</div>
 <script>
 /* ============ CONFIG ============ */
 // Each theme is a set of runners. Add Halloween etc. by adding an entry here.
@@ -114,7 +146,7 @@ function buildMenu(){
 }
 
 /* ============ RACE ENGINE ============ */
-const cv = $("cv"), ctx = cv.getContext("2d");
+const cv = $("cv"); let ctx = cv.getContext("2d"), noLabel = false;
 const W = cv.width, H = cv.height, TOP = 70, LANE = 64, TRACK_LEN = 6000, START_X = 160;
 let theme, field = [], racing = false, t0 = 0, camX = 0, finished = [];
 
@@ -171,8 +203,49 @@ function tick(now){
   draw(t);
   if(finished.length < field.length) return requestAnimationFrame(tick);
   racing = false; $("start").disabled = false;
-  const w = finished[0];
+  const w = finished[0]; setTimeout(showFinish, 900);
   $("res").textContent = `🏆 ${w.n} wins at ${w.odds}/1!  2nd: ${finished[1].n}  3rd: ${finished[2].n}`;
+}
+
+/* ============ FINISH SCREEN ============ */
+function portrait(f){                       // reuse deer() to paint a close-up
+  const c = document.createElement("canvas"); c.width = 220; c.height = 180;
+  const real = ctx; ctx = c.getContext("2d"); noLabel = true;
+  ctx.scale(2.6,2.6); deer({...f,pos:1}, 36, 40, 0);
+  ctx = real; noLabel = false; return c;
+}
+function showFinish(){
+  const pod = $("pod"); pod.innerHTML = "";
+  const meds = ["🥇","🥈","🥉"], pl = ["1st","2nd","3rd"];
+  [1,0,2].forEach(i => {                    // podium layout: 2nd, 1st, 3rd
+    const f = finished[i], d = document.createElement("div");
+    d.className = "card p" + (i+1);
+    d.innerHTML = `<div class="med">${meds[i]}</div>`;
+    d.appendChild(portrait(f));
+    d.insertAdjacentHTML("beforeend", `<div class="nm">${f.n}</div><div class="od">Odds ${f.odds}/1</div><div class="pl">${pl[i]}</div>`);
+    pod.appendChild(d);
+  });
+  $("fin").classList.add("on"); startConf();
+}
+function closeFin(){ $("fin").classList.remove("on"); cancelAnimationFrame(confRaf); }
+$("again").onclick = () => { closeFin(); run(); };
+$("fmenu").onclick = () => { closeFin(); show("menu"); };
+$("fclose").onclick = closeFin;
+const fc = $("conf"), fg = fc.getContext("2d"); let bits = [], confRaf = 0;
+function burst(n){
+  for(let i=0;i<n;i++) bits.push({x:innerWidth/2+(Math.random()-.5)*Math.min(innerWidth,500),y:innerHeight*.5,vx:(Math.random()-.5)*20,vy:-Math.random()*20-4,s:6+Math.random()*9,r:Math.random()*6,vr:(Math.random()-.5)*.4,h:Math.random()*360});
+}
+function startConf(){
+  fc.width = innerWidth; fc.height = innerHeight; bits = [];
+  burst(80); [[1300,120],[2500,260],[4000,140],[6000,120]].forEach(([ms,n]) => setTimeout(() => $("fin").classList.contains("on") && burst(n), ms));
+  cancelAnimationFrame(confRaf); confLoop();
+}
+function confLoop(){
+  fg.clearRect(0,0,fc.width,fc.height);
+  bits.forEach(b => { b.x+=b.vx; b.y+=b.vy; b.vy+=.35; b.vx*=.99; b.r+=b.vr;
+    fg.save(); fg.translate(b.x,b.y); fg.rotate(b.r); fg.fillStyle=`hsl(${b.h},90%,60%)`; fg.fillRect(-b.s/2,-b.s/4,b.s,b.s/2); fg.restore(); });
+  bits = bits.filter(b => b.y < fc.height+20);
+  if($("fin").classList.contains("on")) confRaf = requestAnimationFrame(confLoop);
 }
 
 /* ============ DRAWING ============ */
@@ -196,10 +269,12 @@ function deer(f, x, y, t){
   const run = f.pos > 0 && f.pos < 1 ? t*14 + f.ph : 0, sw = Math.sin(run)*7;
   ctx.save(); ctx.translate(x,y);
   ctx.fillStyle = "#06435c";                                       // label
+  if(!noLabel){
   ctx.font = "bold 13px system-ui"; const lab = `${f.n}  ${f.odds}/1`, lw = ctx.measureText(lab).width + 14;
   ctx.fillStyle = "#fff"; ctx.strokeStyle = "#0a8fc4"; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.roundRect(-lw-48,-14,lw,24,6); ctx.fill(); ctx.stroke();
   ctx.fillStyle = "#06435c"; ctx.fillText(lab, -lw-41, 3);
+  }
   ctx.strokeStyle = f.c; ctx.lineWidth = 5; ctx.lineCap = "round";  // legs
   [[-14,sw],[-8,-sw],[10,-sw],[16,sw]].forEach(([lx,s]) => { ctx.beginPath(); ctx.moveTo(lx,6); ctx.lineTo(lx+s,24); ctx.stroke(); });
   ctx.fillStyle = f.c; ctx.beginPath(); ctx.ellipse(0,0,26,15,0,0,7); ctx.fill();   // body
