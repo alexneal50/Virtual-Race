@@ -39,7 +39,11 @@ canvas{width:100%;max-width:1100px;height:auto;display:block}
 .od{display:inline-block;margin:4px 0;padding:2px 12px;border-radius:99px;background:#06435c;color:#ffd84d;font-weight:800;font-size:clamp(.9rem,2.4vw,1.4rem)}
 .pl{font-size:clamp(1.3rem,4vw,2.6rem);font-weight:900;color:#e0a800}
 .p1 .pl{background:linear-gradient(90deg,#ffd84d,#fff,#ffd84d);background-size:200%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 1.5s linear infinite;-webkit-text-stroke:1px #b88400}
-.fb{position:relative;z-index:4;display:flex;gap:12px;opacity:0;animation:fade .6s 3.6s forwards}
+#fin{padding-bottom:110px}
+#fmsg{position:relative;z-index:2;max-width:760px;padding:0 16px;text-align:center;font-size:clamp(1.05rem,3vw,1.7rem);font-weight:700;text-shadow:0 2px 8px #000;opacity:0;animation:fade .6s 3s forwards}
+#next{position:absolute;z-index:4;bottom:18px;left:50%;transform:translateX(-50%);width:min(92vw,720px);padding:clamp(14px,3vh,26px);font-size:clamp(1.5rem,5vw,2.6rem);font-weight:900;letter-spacing:2px;color:#4a2f00;background:linear-gradient(#ffe680,#ffb400);border:4px solid #fff;border-radius:18px;opacity:0;animation:fade .6s 3.6s forwards,beat .8s ease-in-out 4.2s infinite alternate}
+#next:disabled{cursor:wait}
+@keyframes beat{to{box-shadow:0 0 40px 10px #ffd84d;transform:translateX(-50%) scale(1.03)}}
 @keyframes hue{to{filter:hue-rotate(360deg)}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes pulse{to{transform:scale(1.07)}}
@@ -76,9 +80,10 @@ canvas{width:100%;max-width:1100px;height:auto;display:block}
 
 <div id="fin">
   <div class="bg"></div><div class="rays"></div><canvas id="conf"></canvas>
-  <div class="ft">🏁 RACE RESULT 🏁</div>
+  <div class="ft" id="ftitle">🏁 RACE RESULT 🏁</div>
   <div id="pod"></div>
-  <div class="fb"><button id="again">Race again</button><button id="fmenu">Menu</button><button id="fclose">View track</button></div>
+  <div id="fmsg"></div>
+  <button id="next">NEXT RACE ▶</button>
 </div>
 <script>
 /* ============ CONFIG ============ */
@@ -96,6 +101,7 @@ const THEMES = {
 };
 // Odds ladder, favourite (top lane) to outsider (bottom lane).
 const ODDS = [1, 2, 4, 6, 8, 10];          // shown as 1/1 ... 10/1
+const EVENT_RACES = 5; let raceNo = 1;   // races per event
 const CODES_URL = "codes.json";            // revoke a code by deleting its entry and pushing
 const RECHECK_MS = 5 * 60 * 1000;          // re-validate code while the page stays open
 
@@ -150,7 +156,7 @@ const cv = $("cv"); let ctx = cv.getContext("2d"), noLabel = false;
 const W = cv.width, H = cv.height, TOP = 70, LANE = 64, TRACK_LEN = 6000, START_X = 160;
 let theme, field = [], racing = false, t0 = 0, camX = 0, finished = [];
 
-function openRace(key){ theme = THEMES[key]; $("title").textContent = theme.label; $("res").textContent = ""; setup(); show("race"); draw(0); }
+function openRace(key){ theme = THEMES[key]; raceNo = 1; $("start").style.display = ""; $("start").textContent = "Start race 1 of " + EVENT_RACES; setTitle(); $("res").textContent = ""; setup(); show("race"); draw(0); }
 $("back").onclick = () => { racing = false; show("menu"); };
 $("start").onclick = () => { if(!racing) run(); };
 
@@ -174,6 +180,7 @@ function drawOrder(){
 }
 
 function run(){
+  $("start").style.display = "none"; setTitle();
   setup(); $("res").textContent = "";
   const order = drawOrder(), base = 17;           // seconds for the winner
   order.forEach((f,i) => {
@@ -216,6 +223,10 @@ function portrait(f){                       // reuse deer() to paint a close-up
 }
 function showFinish(){
   const pod = $("pod"); pod.innerHTML = "";
+  const last = raceNo >= EVENT_RACES;
+  $("ftitle").textContent = last ? "🏁 FINAL RACE RESULT 🏁" : `🏁 RACE ${raceNo} OF ${EVENT_RACES} 🏁`;
+  $("fmsg").textContent = last ? "That was the last race of the event! Update your sheets and pay your winnings." : "Update your sheets, pay your winnings and when you are ready start the next race.";
+  const nb = $("next"); nb.textContent = last ? "FINISH EVENT" : "NEXT RACE ▶"; nb.disabled = true; setTimeout(() => nb.disabled = false, 3600);
   const meds = ["🥇","🥈","🥉"], pl = ["1st","2nd","3rd"];
   [1,0,2].forEach(i => {                    // podium layout: 2nd, 1st, 3rd
     const f = finished[i], d = document.createElement("div");
@@ -228,9 +239,8 @@ function showFinish(){
   $("fin").classList.add("on"); startConf();
 }
 function closeFin(){ $("fin").classList.remove("on"); cancelAnimationFrame(confRaf); }
-$("again").onclick = () => { closeFin(); run(); };
-$("fmenu").onclick = () => { closeFin(); show("menu"); };
-$("fclose").onclick = closeFin;
+$("next").onclick = () => { closeFin(); if(raceNo >= EVENT_RACES){ show("menu"); return; } raceNo++; run(); };
+function setTitle(){ $("title").textContent = `${theme.label} · Race ${raceNo} of ${EVENT_RACES}`; }
 const fc = $("conf"), fg = fc.getContext("2d"); let bits = [], confRaf = 0;
 function burst(n){
   for(let i=0;i<n;i++) bits.push({x:innerWidth/2+(Math.random()-.5)*Math.min(innerWidth,500),y:innerHeight*.5,vx:(Math.random()-.5)*20,vy:-Math.random()*20-4,s:6+Math.random()*9,r:Math.random()*6,vr:(Math.random()-.5)*.4,h:Math.random()*360});
