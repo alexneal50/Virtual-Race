@@ -1,0 +1,6 @@
+{
+  "codes": [
+    { "label": "Demo code (code: XMAS-DEMO)", "hash": "8a53ec3947f34bcfc43e67ef43608898f2c37deb63b1c6f630bd1e3fb49a4b72", "expires": "2027-01-06" },
+    { "label": "Example friend code (code: FRIEND-2026)", "hash": "09a74654b5f53f9d7ed22041542c359518e403e53a82d29c7704bb2fb83a8750", "expires": "2026-12-31" }
+  ]
+}

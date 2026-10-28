@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual Racing</title>
+<style>
+:root{--bg:#e9fbff;--ink:#06435c;--card:#fff;--accent:#0a8fc4}
+@media (prefers-color-scheme:dark){:root{--bg:#06222e;--ink:#d9f4ff;--card:#0c3547;--accent:#4cc9f5}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+.screen{display:none;min-height:100vh;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px;text-align:center}
+.screen.on{display:flex}
+h1{margin:0;font-size:2.2rem}
+input,button{font:inherit;padding:12px 16px;border-radius:10px;border:2px solid var(--accent)}
+input{background:var(--card);color:var(--ink);text-align:center;text-transform:uppercase}
+button{background:var(--accent);color:#fff;cursor:pointer;font-weight:700}
+button:disabled{opacity:.45;cursor:not-allowed}
+.themes{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.err{color:#d33;min-height:1.2em}
+#race{padding:0;justify-content:flex-start;gap:0}
+#bar{display:flex;gap:10px;align-items:center;padding:8px;width:100%;justify-content:center;background:var(--card)}
+canvas{width:100%;max-width:1100px;height:auto;display:block}
+#res{min-height:2.4em;padding:8px;font-weight:700}
+</style>
+</head>
+<body>
+<section id="gate" class="screen on">
+  <h1>🦌 Virtual Racing</h1>
+  <p>Enter your access code</p>
+  <input id="code" placeholder="ACCESS CODE" autocomplete="off">
+  <button id="go">Enter</button>
+  <div class="err" id="err"></div>
+</section>
+
+<section id="menu" class="screen">
+  <h1>Choose your race</h1>
+  <div class="themes" id="themes"></div>
+</section>
+
+<section id="race" class="screen">
+  <div id="bar">
+    <button id="back">← Menu</button>
+    <button id="start">Start race</button>
+    <span id="title"></span>
+  </div>
+  <canvas id="cv" width="1100" height="560"></canvas>
+  <div id="res"></div>
+</section>
+
+<script>
+/* ============ CONFIG ============ */
+// Each theme is a set of runners. Add Halloween etc. by adding an entry here.
+const THEMES = {
+  christmas: {
+    label: "🎄 Christmas Reindeer Race", sky: "#bff6ff", track: "#d3fbff", edge: "#4fdcff", finish: "#ffffff",
+    runners: [
+      {n:"Blizzard",c:"#8a5a35",c2:"#f3efe8"}, {n:"Starlight",c:"#8b4a22",c2:"#8b4a22"},
+      {n:"Snowflake",c:"#6a5648",c2:"#6a5648"}, {n:"Twinkle",c:"#f4f6f6",c2:"#f4f6f6"},
+      {n:"Cracker",c:"#e07a1f",c2:"#e07a1f"}, {n:"Jingles",c:"#2b211c",c2:"#d8d4cc"}
+    ]
+  },
+  halloween: { label: "🎃 Halloween Race", soon: true }
+};
+// Odds ladder, favourite (top lane) to outsider (bottom lane).
+const ODDS = [1, 2, 4, 6, 8, 10];          // shown as 1/1 ... 10/1
+const CODES_URL = "codes.json";            // revoke a code by deleting its entry and pushing
+const RECHECK_MS = 5 * 60 * 1000;          // re-validate code while the page stays open
+
+/* ============ ACCESS CODE ============ */
+const $ = id => document.getElementById(id);
+const show = id => document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id));
+async function sha(s){
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join("");
+}
+async function codeValid(code){
+  try{
+    const r = await fetch(CODES_URL + "?t=" + Date.now(), {cache:"no-store"});
+    const list = (await r.json()).codes || [];
+    const h = await sha(code.trim().toUpperCase());
+    const hit = list.find(c => c.hash === h);
+    if(!hit) return "That code isn't valid (or has been revoked).";
+    if(hit.expires && new Date(hit.expires + "T23:59:59") < new Date()) return "That code has expired.";
+    return "";
+  }catch(e){ return "Couldn't check the code. Check your connection and try again."; }
+}
+async function enter(code){
+  $("err").textContent = "Checking…";
+  const bad = await codeValid(code);
+  if(bad){ localStorage.removeItem("vr_code"); $("err").textContent = bad; show("gate"); return false; }
+  localStorage.setItem("vr_code", code.trim().toUpperCase());
+  $("err").textContent = ""; buildMenu(); show("menu"); return true;
+}
+$("go").onclick = () => enter($("code").value);
+$("code").onkeydown = e => { if(e.key === "Enter") enter($("code").value); };
+setInterval(async () => {                       // kick out revoked codes mid-session
+  const c = localStorage.getItem("vr_code");
+  if(c && !$("gate").classList.contains("on") && await codeValid(c)){ racing = false; localStorage.removeItem("vr_code"); show("gate"); $("err").textContent = "Your code is no longer valid."; }
+}, RECHECK_MS);
+const saved = localStorage.getItem("vr_code");
+if(saved) enter(saved);
+
+/* ============ MENU ============ */
+function buildMenu(){
+  $("themes").innerHTML = "";
+  for(const [k,t] of Object.entries(THEMES)){
+    const b = document.createElement("button");
+    b.textContent = t.label + (t.soon ? " (coming soon)" : "");
+    b.disabled = !!t.soon;
+    b.onclick = () => openRace(k);
+    $("themes").appendChild(b);
+  }
+}
+
+/* ============ RACE ENGINE ============ */
+const cv = $("cv"), ctx = cv.getContext("2d");
+const W = cv.width, H = cv.height, TOP = 70, LANE = 64, TRACK_LEN = 6000, START_X = 160;
+let theme, field = [], racing = false, t0 = 0, camX = 0, finished = [];
+
+function openRace(key){ theme = THEMES[key]; $("title").textContent = theme.label; $("res").textContent = ""; setup(); show("race"); draw(0); }
+$("back").onclick = () => { racing = false; show("menu"); };
+$("start").onclick = () => { if(!racing) run(); };
+
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+function setup(){
+  // New race: shuffle who's favourite, then lane 0 = 1/1 ... lane 5 = 10/1
+  field = shuffle([...theme.runners]).map((r,i) => ({...r, odds:ODDS[i], lane:i, pos:0, ph:Math.random()*6}));
+  finished = []; camX = 0;
+}
+
+// Draw finishing order using win-probability weights (1/(odds+1)), so 1/1 wins ~half the time, 10/1 ~1 in 11.
+function drawOrder(){
+  const pool = field.map(f => ({f, w:1/(f.odds+1)})), order = [];
+  while(pool.length){
+    const tot = pool.reduce((s,p) => s+p.w, 0); let x = Math.random()*tot, k = 0;
+    while(k < pool.length-1 && (x -= pool[k].w) > 0) k++;
+    order.push(pool.splice(k,1)[0].f);
+  }
+  return order;
+}
+
+function run(){
+  setup(); $("res").textContent = "";
+  const order = drawOrder(), base = 17;           // seconds for the winner
+  order.forEach((f,i) => {
+    f.T = base + i*0.7 + Math.random()*0.35;      // set finish time so the drawn order is guaranteed
+    f.a = [0.05+Math.random()*0.06, 0.04+Math.random()*0.05];
+    f.p = [Math.random()*6.3, Math.random()*6.3]; f.last = 0;
+  });
+  racing = true; t0 = performance.now(); $("start").disabled = true;
+  requestAnimationFrame(tick);
+}
+
+function progress(f, t){                           // smooth wobble that always ends exactly at 1
+  const u = Math.min(t/f.T, 1), env = u*(1-u);
+  const v = u + env*(f.a[0]*Math.sin(2*Math.PI*2*u+f.p[0]) + f.a[1]*Math.sin(2*Math.PI*3.3*u+f.p[1]))*4;
+  return Math.max(f.last, Math.min(v, 1));
+}
+
+function tick(now){
+  if(!racing) return;
+  const t = (now - t0)/1000;
+  field.forEach(f => {
+    f.last = f.pos = progress(f, t);
+    if(f.pos >= 1 && !f.done){ f.done = true; finished.push(f); }
+  });
+  const lead = Math.max(...field.map(f => f.pos));
+  camX = Math.max(0, Math.min(lead*TRACK_LEN - W*0.55, TRACK_LEN + 220 - W));
+  draw(t);
+  if(finished.length < field.length) return requestAnimationFrame(tick);
+  racing = false; $("start").disabled = false;
+  const w = finished[0];
+  $("res").textContent = `🏆 ${w.n} wins at ${w.odds}/1!  2nd: ${finished[1].n}  3rd: ${finished[2].n}`;
+}
+
+/* ============ DRAWING ============ */
+function draw(t){
+  ctx.fillStyle = theme.sky; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = theme.edge; ctx.fillRect(0,0,W,TOP-10); ctx.fillRect(0,TOP+LANE*6+10,W,H);
+  ctx.fillStyle = theme.track; ctx.fillRect(0,TOP-10,W,LANE*6+20);
+  ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = 2;
+  for(let m = Math.floor(camX/200)*200; m < camX+W; m += 200){   // scrolling distance marks
+    const x = m - camX; ctx.beginPath(); ctx.moveTo(x,TOP-10); ctx.lineTo(x,TOP+LANE*6+10); ctx.stroke();
+  }
+  for(let i=1;i<6;i++){ ctx.setLineDash([12,10]); ctx.beginPath(); ctx.moveTo(0,TOP+i*LANE); ctx.lineTo(W,TOP+i*LANE); ctx.stroke(); }
+  ctx.setLineDash([]);
+  const fx = START_X + TRACK_LEN - camX;                          // finish line
+  for(let i=0;i<LANE*6/12;i++){ ctx.fillStyle = i%2 ? "#222" : theme.finish; ctx.fillRect(fx, TOP+i*12, 12, 12); }
+  ctx.fillStyle = "#06435c"; ctx.font = "bold 16px system-ui"; ctx.fillText("FINISH", fx-20, TOP-16);
+  field.forEach(f => deer(f, START_X + f.pos*TRACK_LEN - camX, TOP + f.lane*LANE + LANE/2, t));
+}
+
+function deer(f, x, y, t){
+  const run = f.pos > 0 && f.pos < 1 ? t*14 + f.ph : 0, sw = Math.sin(run)*7;
+  ctx.save(); ctx.translate(x,y);
+  ctx.fillStyle = "#06435c";                                       // label
+  ctx.font = "bold 13px system-ui"; const lab = `${f.n}  ${f.odds}/1`, lw = ctx.measureText(lab).width + 14;
+  ctx.fillStyle = "#fff"; ctx.strokeStyle = "#0a8fc4"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(-lw-48,-14,lw,24,6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#06435c"; ctx.fillText(lab, -lw-41, 3);
+  ctx.strokeStyle = f.c; ctx.lineWidth = 5; ctx.lineCap = "round";  // legs
+  [[-14,sw],[-8,-sw],[10,-sw],[16,sw]].forEach(([lx,s]) => { ctx.beginPath(); ctx.moveTo(lx,6); ctx.lineTo(lx+s,24); ctx.stroke(); });
+  ctx.fillStyle = f.c; ctx.beginPath(); ctx.ellipse(0,0,26,15,0,0,7); ctx.fill();   // body
+  ctx.fillStyle = f.c2; ctx.beginPath(); ctx.ellipse(-4,5,14,7,0,0,7); ctx.fill();   // belly patch
+  ctx.fillStyle = f.c; ctx.beginPath(); ctx.ellipse(28,-12,11,8,.5,0,7); ctx.fill(); // head
+  ctx.strokeStyle = "#d9c9a3"; ctx.lineWidth = 2.5;                                   // antlers
+  ctx.beginPath(); ctx.moveTo(26,-18); ctx.lineTo(22,-34); ctx.moveTo(24,-26); ctx.lineTo(32,-30);
+  ctx.moveTo(30,-18); ctx.lineTo(30,-36); ctx.moveTo(30,-28); ctx.lineTo(38,-33); ctx.stroke();
+  ctx.fillStyle = "#e33"; ctx.beginPath(); ctx.arc(37,-10,3,0,7); ctx.fill();        // nose
+  ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(30,-14,1.8,0,7); ctx.fill();      // eye
+  ctx.restore();
+}
+</script>
+</body>
+</html>
