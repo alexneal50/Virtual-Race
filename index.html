@@ -28,19 +28,19 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #fin .rays{position:absolute;left:50%;top:42%;width:250vmax;height:250vmax;margin:-125vmax 0 0 -125vmax;background:repeating-conic-gradient(rgba(255,255,255,.16) 0 10deg,transparent 10deg 20deg);animation:spin 24s linear infinite}
 #conf{position:absolute;inset:0;z-index:3;pointer-events:none}
 .ft{position:relative;z-index:2;font-size:clamp(1.8rem,6vw,4rem);font-weight:900;letter-spacing:2px;text-align:center;text-shadow:0 0 20px #ffd84d,0 0 45px #ff9d00;animation:pulse 1s ease-in-out infinite alternate}
-#pod{position:relative;z-index:2;display:flex;align-items:flex-end;gap:clamp(8px,2vw,28px);margin:22px 0}
-.card{width:clamp(105px,27vw,250px);background:linear-gradient(#fff,#c9f1ff);border-radius:18px;padding:8px 8px 12px;text-align:center;color:#06435c;opacity:0;border:5px solid #cd7f32;animation:pop .7s cubic-bezier(.2,1.6,.4,1) forwards}
+#pod{position:relative;z-index:2;display:flex;align-items:flex-end;gap:clamp(8px,1.6vw,22px);margin:16px 0 0}
+.card{width:clamp(90px,16vw,200px);background:linear-gradient(#fff,#c9f1ff);border-radius:18px;padding:8px 8px 12px;text-align:center;color:#06435c;opacity:0;border:5px solid #cd7f32;animation:pop .7s cubic-bezier(.2,1.6,.4,1) forwards}
 .card canvas{width:100%;height:auto;display:block}
 .card.p3{animation-delay:.3s}
 .card.p2{animation-delay:1.2s;border-color:#c0c0c0;box-shadow:0 0 25px #dfe}
-.card.p1{width:clamp(125px,33vw,310px);border-color:gold;animation:pop .7s cubic-bezier(.2,1.6,.4,1) 2.4s forwards,glow .9s ease-in-out 3.1s infinite alternate}
-.med{font-size:clamp(1.6rem,5vw,2.8rem);animation:bob 1s ease-in-out infinite alternate}
-.nm{font-size:clamp(1rem,3vw,1.9rem);font-weight:900}
-.od{display:inline-block;margin:4px 0;padding:2px 12px;border-radius:99px;background:#06435c;color:#ffd84d;font-weight:800;font-size:clamp(.9rem,2.4vw,1.4rem)}
-.pl{font-size:clamp(1.3rem,4vw,2.6rem);font-weight:900;color:#e0a800}
+.card.p1{width:clamp(110px,20vw,250px);border-color:gold;animation:pop .7s cubic-bezier(.2,1.6,.4,1) 2.4s forwards,glow .9s ease-in-out 3.1s infinite alternate}
+.med{font-size:clamp(1.3rem,3.2vw,2.2rem);animation:bob 1s ease-in-out infinite alternate}
+.nm{font-size:clamp(.9rem,2.1vw,1.5rem);font-weight:900}
+.od{display:inline-block;margin:4px 0;padding:2px 12px;border-radius:99px;background:#06435c;color:#ffd84d;font-weight:800;font-size:clamp(.8rem,1.7vw,1.15rem)}
+.pl{font-size:clamp(1.1rem,3vw,2rem);font-weight:900;color:#e0a800}
 .p1 .pl{background:linear-gradient(90deg,#ffd84d,#fff,#ffd84d);background-size:200%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 1.5s linear infinite;-webkit-text-stroke:1px #b88400}
 #fin{padding-bottom:110px}
-#fmsg{position:relative;z-index:2;max-width:760px;padding:0 16px;text-align:center;font-size:clamp(1.05rem,3vw,1.7rem);font-weight:700;text-shadow:0 2px 8px #000;opacity:0;animation:fade .6s 3s forwards}
+#fmsg{position:relative;z-index:2;max-width:900px;margin-top:10px;padding:0 16px;text-align:center;font-size:clamp(1.1rem,2.6vw,1.9rem);font-weight:800;text-shadow:0 2px 8px #000;opacity:0;animation:fade .6s .4s forwards}
 #next{position:absolute;z-index:4;bottom:18px;left:50%;transform:translateX(-50%);width:min(92vw,720px);padding:clamp(14px,3vh,26px);font-size:clamp(1.5rem,5vw,2.6rem);font-weight:900;letter-spacing:2px;color:#4a2f00;background:linear-gradient(#ffe680,#ffb400);border:4px solid #fff;border-radius:18px;opacity:0;animation:fade .6s 3.6s forwards,beat .8s ease-in-out 4.2s infinite alternate}
 #next:disabled{cursor:wait}
 @keyframes beat{to{box-shadow:0 0 40px 10px #ffd84d;transform:translateX(-50%) scale(1.03)}}
@@ -85,8 +85,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <div id="fin">
   <div class="bg"></div><div class="rays"></div><canvas id="conf"></canvas>
   <div class="ft" id="ftitle">🏁 RACE RESULT 🏁</div>
-  <div id="pod"></div>
   <div id="fmsg"></div>
+  <div id="pod"></div>
   <button id="next">NEXT RACE ▶</button>
 </div>
 <script>
