@@ -96,9 +96,9 @@ const THEMES = {
   christmas: {
     label: "🎄 Christmas Reindeer Race", scene: sceneSnow, post: pole, puff: ["#fff","rgba(150,190,230,.8)"],
     runners: [
-      {n:"Blizzard",c:"#8a5a35",c2:"#f3efe8",s1:"#f58a1f",s2:"#ffd21f"}, {n:"Starlight",c:"#8b4a22",c2:"#8b4a22",s1:"#d8232a",s2:"#ffffff"},
-      {n:"Snowflake",c:"#6a5648",c2:"#6a5648",s1:"#2a6fd6",s2:"#ffffff"}, {n:"Twinkle",c:"#f4f6f6",c2:"#f4f6f6",s1:"#8a3fd6",s2:"#ff8ad0"},
-      {n:"Cracker",c:"#e07a1f",c2:"#e07a1f",s1:"#1f9d55",s2:"#ffe14d"}, {n:"Jingles",c:"#2b211c",c2:"#d8d4cc",s1:"#2a2a2a",s2:"#e0b020"}
+      {n:"Blizzard",c:"#8a5a35",c2:"#f3efe8",s1:"#f58a1f",s2:"#ffd21f",ant:0,sz:1,bell:"#5ec8d0",stripe:true}, {n:"Starlight",c:"#8b4a22",c2:"#8b4a22",s1:"#d8232a",s2:"#ffffff",ant:1,sz:1.03,bell:"#ffd24d",star:true},
+      {n:"Snowflake",c:"#6a5648",c2:"#f1f4f6",s1:"#2a6fd6",s2:"#ffffff",ant:2,sz:.94,bell:"#9fd8ff",sock:true,flake:true}, {n:"Twinkle",c:"#f4f6f6",c2:"#f4f6f6",s1:"#8a3fd6",s2:"#ff8ad0",ant:3,sz:.97,bell:"#ff8ad0",sparkle:true},
+      {n:"Cracker",c:"#e07a1f",c2:"#e07a1f",s1:"#1f9d55",s2:"#ffe14d",ant:4,sz:1.06,bell:"#6fe08a",spots:true}, {n:"Jingles",c:"#2b211c",c2:"#d8d4cc",s1:"#2a2a2a",s2:"#e0b020",ant:5,sz:1,bell:"#ffd24d",rn:true}
     ]
   },
   halloween: {
@@ -162,7 +162,9 @@ function buildMenu(){
 /* ============ RACE ENGINE ============ */
 const cv = $("cv"); let ctx = cv.getContext("2d"), noLabel = false;
 const W = 1600, H = 800, TOP = 100, LANE = 104, TRACK_LEN = 7000, START_X = 200;   // logical size; canvas is rendered at screen resolution
-let lastT = 0, snow = [], endT = 0;
+let lastT = 0, snow = [], endT = 0, leadPx = 0;
+const GAP = 650;                              // max on-screen distance behind the leader
+function sx(w){ const lw = START_X+leadPx, d = lw-w; return lw - camX - (d > 0 ? GAP*(1-Math.exp(-d/GAP)) : d); }
 let theme, field = [], racing = false, t0 = 0, camX = 0, finished = [];
 
 function openRace(key){ theme = THEMES[key]; raceNo = 1; $("start").style.display = ""; $("start").textContent = "Start race 1 of " + EVENT_RACES; setTitle(); $("res").textContent = ""; setup(); show("race"); fit(); draw(0); }
@@ -174,7 +176,7 @@ function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.random()*(i+1)|
 function setup(){
   // New race: shuffle who's favourite, then lane 0 = 1/1 ... lane 5 = 10/1
   field = shuffle([...theme.runners]).map((r,i) => ({...r, odds:ODDS[i], lane:i, pos:0, ph:Math.random()*6, over:0, mv:false, seed:Math.random()*6}));
-  finished = []; camX = 0; snow = [];
+  finished = []; camX = 0; snow = []; leadPx = 0;
 }
 
 // Draw finishing order using win-probability weights (1/(odds+1)), so 1/1 wins ~half the time, 10/1 ~1 in 11.
@@ -193,7 +195,7 @@ function run(){
   setup(); $("res").textContent = "";
   const order = drawOrder(), base = 17;           // seconds for the winner
   order.forEach((f,i) => {
-    f.T = base + i*0.7 + Math.random()*0.35;      // set finish time so the drawn order is guaranteed
+    f.T = base + i*0.7 + Math.random()*0.35; f.omax = 170 - i*28;   // winner coasts furthest, so the finish order stays visible      // set finish time so the drawn order is guaranteed
     f.a = [0.05+Math.random()*0.06, 0.04+Math.random()*0.05];
     f.p = [Math.random()*6.3, Math.random()*6.3]; f.last = 0;
   });
@@ -214,17 +216,17 @@ function tick(now){
   field.forEach(f => {
     f.last = f.pos = progress(f, t);
     if(f.pos >= 1 && !f.done){ f.done = true; finished.push(f); }
-    f.over = t > f.T ? 150*(1 - Math.exp(-(t - f.T)*1.8)) : 0;   // coast past the line
+    f.over = t > f.T ? f.omax*(1 - Math.exp(-(t - f.T)*1.8)) : 0;   // coast past the line
     f.mv = t < f.T + 1.3;
-    if(f.mv){
-      f.ph += dt*15*(t < f.T ? 1 : Math.max(0, 1 - (t - f.T)/1.3));
-      if(f.k !== "ghost" && Math.random() < dt*30) snow.push({x:START_X+f.pos*TRACK_LEN+f.over-20, y:TOP+f.lane*LANE+LANE/2+38+Math.random()*6, vx:-40-Math.random()*70, vy:-30-Math.random()*60, l:.6, r:2+Math.random()*3});
-    }
+    if(f.mv) f.ph += dt*15*(t < f.T ? 1 : Math.max(0, 1 - (t - f.T)/1.3));
   });
-  snow.forEach(p => { p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 140*dt; p.l -= dt; });
+  leadPx = Math.max(...field.map(f => f.pos*TRACK_LEN + f.over));
+  const prev = camX;
+  camX = Math.max(0, Math.min(leadPx - W*0.64, TRACK_LEN + START_X + 260 - W));
+  snow.forEach(p => { p.x += p.vx*dt - (camX - prev); p.y += p.vy*dt; p.vy += 140*dt; p.l -= dt; });
+  field.forEach(f => { if(f.mv && f.k !== "ghost" && Math.random() < dt*30)
+    snow.push({x:sx(START_X+f.pos*TRACK_LEN+f.over)-20, y:TOP+f.lane*LANE+LANE/2+38+Math.random()*6, vx:-40-Math.random()*70, vy:-30-Math.random()*60, l:.6, r:2+Math.random()*3}); });
   snow = snow.filter(p => p.l > 0);
-  const lead = Math.max(...field.map(f => f.pos));
-  camX = Math.max(0, Math.min(lead*TRACK_LEN - W*0.64, TRACK_LEN + START_X + 260 - W));   // leader sits right of centre so the pack stays in view
   draw(t);
   if(t < endT) return requestAnimationFrame(tick);
   racing = false; $("start").disabled = false;
@@ -236,7 +238,7 @@ function tick(now){
 function portrait(f){                       // reuse deer() to paint a close-up
   const c = document.createElement("canvas"); c.width = 420; c.height = 430;
   const real = ctx; ctx = c.getContext("2d"); noLabel = true;
-  ctx.scale(2.3,2.3); (theme.runner || deer)({...f,mv:false,ph:0}, f.k ? 91 : 78, f.k ? 101 : 110, 0);
+  ctx.scale(2.3,2.3); (theme.runner || deer)({...f,mv:false,ph:0}, f.k ? 91 : 76, f.k ? 101 : 112, 0);
   ctx = real; noLabel = false; return c;
 }
 function showFinish(){
@@ -308,14 +310,14 @@ function draw(t){
   ctx.setTransform(k,0,0,k,0,0);
   theme.scene(t,bot);
   for(let m=Math.floor(camX/400)*400;m<camX+W+400;m+=400){ theme.post(m-camX,TOP-12); theme.post(m-camX,bot+22); }
-  ctx.fillStyle = "rgba(120,165,210,.5)"; ctx.fillRect(START_X-70-camX,TOP-10,5,LANE*6+20);   // start line
-  const fx = START_X+TRACK_LEN+60-camX;                                                       // finish line
+  ctx.fillStyle = "rgba(120,165,210,.5)"; ctx.fillRect(sx(START_X-70),TOP-10,5,LANE*6+20);   // start line
+  const fx = sx(START_X+TRACK_LEN+60);                                                       // finish line
   for(let i=0;i<LANE*6/18;i++) for(let j=0;j<2;j++){ ctx.fillStyle = (i+j)%2 ? "#fff" : "#222"; ctx.fillRect(fx+j*18,TOP+i*18,18,18); }
-  ctx.fillStyle = "#5a3a22"; ctx.fillRect(fx-6,TOP-110,8,100);
-  ctx.fillStyle = theme.acc || "#d8232a"; ctx.beginPath(); ctx.roundRect(fx-80,TOP-118,170,38,8); ctx.fill();
-  ctx.fillStyle = "#fff"; ctx.font = "bold 26px system-ui"; ctx.textAlign = "center"; ctx.fillText("FINISH",fx+5,TOP-91); ctx.textAlign = "left";
-  field.forEach(f => { const px = START_X + f.pos*TRACK_LEN + f.over - camX, py = TOP + f.lane*LANE + LANE/2 - 12; label(f,px,py); (theme.runner || deer)(f,px,py,t); });
-  snow.forEach(p => { ctx.globalAlpha = Math.min(1,p.l/.4); E(p.x-camX,p.y,p.r,p.r,0,theme.puff[0]); ctx.strokeStyle = theme.puff[1]; ctx.lineWidth = 1; ctx.stroke(); });
+  ctx.fillStyle = "#5a3a22"; ctx.fillRect(fx-6,TOP-84,8,74);
+  ctx.fillStyle = theme.acc || "#d8232a"; ctx.beginPath(); ctx.roundRect(fx-80,TOP-92,170,36,8); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.font = "bold 26px system-ui"; ctx.textAlign = "center"; ctx.fillText("FINISH",fx+5,TOP-66); ctx.textAlign = "left";
+  field.forEach(f => { const px = sx(START_X + f.pos*TRACK_LEN + f.over), py = TOP + f.lane*LANE + LANE/2 - 12; label(f,px,py); (theme.runner || deer)(f,px,py,t); });
+  snow.forEach(p => { ctx.globalAlpha = Math.min(1,p.l/.4); E(p.x,p.y,p.r,p.r,0,theme.puff[0]); ctx.strokeStyle = theme.puff[1]; ctx.lineWidth = 1; ctx.stroke(); });
   ctx.globalAlpha = 1;
 }
 
@@ -545,77 +547,91 @@ function monster(f,x,y,t){
   ctx.restore();
 }
 
-function antlers(sway){                       // big branching antlers with a forward brow tine
-  for(const [dx,col,w,sc] of [[-7,"#b8a785",4.6,.8],[1,"#f0e3be",5.4,.85]]){
-    ctx.save(); ctx.translate(54+dx,-48); ctx.rotate(sway); ctx.scale(sc,sc); ctx.lineCap = "round";
-    for(const [lc,lw] of [["#5a4630",w+3],[col,w]]){
-      ctx.strokeStyle = lc; ctx.lineWidth = lw; ctx.beginPath();
-      ctx.moveTo(0,0); ctx.quadraticCurveTo(-18,-14,-20,-46);
-      ctx.moveTo(-10,-12); ctx.lineTo(-1,-27); ctx.moveTo(-16,-25); ctx.lineTo(-7,-42); ctx.moveTo(-19,-36); ctx.lineTo(-30,-50);
-      ctx.moveTo(-20,-46); ctx.lineTo(-11,-60); ctx.moveTo(-20,-46); ctx.lineTo(-30,-58);
-      ctx.moveTo(2,-3); ctx.quadraticCurveTo(15,-12,16,-27); ctx.moveTo(11,-13); ctx.lineTo(22,-17);
-      ctx.stroke();
-    }
+function star(x,y,r,c){ ctx.fillStyle = c; ctx.beginPath(); for(let i=0;i<10;i++){ const a = -Math.PI/2+i*Math.PI/5, rr = i%2 ? r*.45 : r; ctx[i ? "lineTo" : "moveTo"](x+Math.cos(a)*rr,y+Math.sin(a)*rr); } ctx.fill(); }
+const ANT = [   // six different antler shapes
+  [[[0,0],[-3,-14],[-8,-30]],[[-3,-14],[5,-22]],[[-8,-30],[-17,-38]],[[-8,-30],[-6,-42]],[[-8,-30],[2,-38]]],
+  [[[0,0],[-8,-12],[-14,-28],[-12,-44]],[[-8,-12],[2,-20]],[[-14,-28],[-4,-34]],[[-14,-28],[-26,-34]],[[-12,-44],[-3,-52]],[[-12,-44],[-22,-50]]],
+  [[[0,0],[-2,-10],[-5,-20]],[[-2,-10],[6,-16]],[[-5,-20],[-12,-26]],[[-5,-20],[2,-27]]],
+  [[[0,0],[-10,-10],[-22,-16],[-34,-14]],[[-10,-10],[-8,-22]],[[-22,-16],[-20,-28]],[[-34,-14],[-40,-24]],[[-34,-14],[-42,-8]]],
+  [[[0,0],[-4,-16]],[[-4,-16],[-14,-34]],[[-4,-16],[6,-34]],[[-14,-34],[-20,-44]],[[-14,-34],[-8,-46]],[[6,-34],[0,-46]],[[6,-34],[14,-42]]],
+  [[[0,0],[-6,-14]],[[-6,-14],[-20,-24]],[[-6,-14],[-14,-36]],[[-6,-14],[-2,-38]],[[-6,-14],[8,-30]],[[-6,-14],[-26,-10]]]
+];
+function antlers(f,sway){
+  const A = ANT[f.ant || 0];
+  for(const [dx,col,sc] of [[-7,"#a99a78",.88],[0,"#e6d8b6",1]]){
+    ctx.save(); ctx.translate(46+dx,-47); ctx.rotate(sway); ctx.scale(sc,sc); ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for(const [lc,lw] of [["#5d4b30",7],[col,4]]){ ctx.strokeStyle = lc; ctx.lineWidth = lw; ctx.beginPath(); A.forEach(pl => pl.forEach(([x,y],i) => i ? ctx.lineTo(x,y) : ctx.moveTo(x,y))); ctx.stroke(); }
     ctx.restore();
   }
 }
 function jockey(f,ph,mv){
   const skin = "#f1c7a0", dark = "#241810";
-  ctx.save(); ctx.translate(0, mv ? Math.sin(ph*2)*1.6 : 0);
-  ctx.fillStyle = "#fff"; ctx.strokeStyle = dark; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.roundRect(-5,-27,26,17,4); ctx.fill(); ctx.stroke();   // numbered saddle cloth
-  ctx.fillStyle = f.s1; ctx.font = "bold 12px system-ui"; ctx.textAlign = "center"; ctx.fillText(f.lane+1,8,-14); ctx.textAlign = "left";
-  limb(11,-30,9,12,.9,-.8,8,6,"#f4f4f4");                              // white breeches
-  B(10,-10,5.5,3.5,.2,"#1b1b1b");                                       // boot
-  B(18,-40,14,8,-.75,f.s1); B(20,-38,5,8,-.75,f.s2);                     // crouched torso in silks
-  limb(27,-45,11,10,1.2,1.35,6,5,f.s1); B(49,-37,3.6,3.6,0,skin);        // reins arm + glove
-  B(33,-50,7.5,7.5,0,skin); ctx.fillStyle = f.s2; ctx.beginPath(); ctx.ellipse(33,-52,8.5,7.5,0,Math.PI,2*Math.PI); ctx.fill(); ctx.strokeStyle = dark; ctx.lineWidth = 1.4; ctx.stroke();
-  ctx.fillStyle = dark; ctx.fillRect(34,-52,10,2.2); E(37,-49,3,2.4,0,"rgba(140,210,255,.9)"); E(38,-49.5,1,1,0,"#fff");   // helmet peak + goggles
+  ctx.save(); ctx.translate(-6, mv ? Math.sin(ph*2)*1.6 : 0);
+  ctx.fillStyle = "#fff"; ctx.strokeStyle = dark; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.roundRect(-5,-24,26,16,4); ctx.fill(); ctx.stroke();   // numbered saddle cloth
+  ctx.fillStyle = f.s1; ctx.font = "bold 12px system-ui"; ctx.textAlign = "center"; ctx.fillText(f.lane+1,8,-12); ctx.textAlign = "left";
+  limb(11,-27,8,11,.9,-.8,8,6,"#f4f4f4"); B(11,-8,5.5,3.5,.2,"#1b1b1b");   // breeches + boot
+  B(18,-37,14,8,-.75,f.s1); B(20,-35,5,8,-.75,f.s2);                       // crouched torso in silks
+  limb(27,-42,9,8,1.15,1.35,6,5,f.s1); B(43,-37.5,3.6,3.6,0,skin);          // arm + glove
+  B(33,-47,7.5,7.5,0,skin); ctx.fillStyle = f.s2; ctx.beginPath(); ctx.ellipse(33,-49,8.5,7.5,0,Math.PI,2*Math.PI); ctx.fill(); ctx.strokeStyle = dark; ctx.lineWidth = 1.4; ctx.stroke();
+  ctx.fillStyle = dark; ctx.fillRect(34,-49,10,2.2); E(37,-46,3,2.4,0,"rgba(140,210,255,.9)"); E(38,-46.5,1,1,0,"#fff");   // helmet peak + goggles
   ctx.restore();
 }
 function deer(f,x,y,t){
-  const mv = f.mv, ph = f.ph || 0, c = f.c, c2 = f.c2 === f.c ? lt(f.c,.55) : f.c2, dk = sh(c,.62), ol = sh(c,.36);
-  ctx.save(); ctx.translate(x,y); ctx.scale(1.1,1.1);
-  E(0,60,54,6,0,"rgba(40,80,130,.22)");
-  ctx.translate(0, mv ? -Math.abs(Math.sin(ph))*7 : Math.sin(t*2+f.seed)*.7); ctx.rotate(mv ? Math.sin(ph)*.05 : 0);
-  const leg = (hx,hy,p,col) => {                                                    // long, fully extended gallop legs
-    const a1 = mv ? Math.sin(p) : 0, [ex,ey] = limb(hx,hy,24,23,a1,mv ? a1-.7*(1+Math.sin(p+1.3)) : 0,9,6,col);
-    B(ex+3,ey+1,6.5,3.8,0,"#2a1b12");
+  const mv = f.mv, ph = f.ph || 0, c = f.c, c2 = f.c2 === f.c ? lt(f.c,.5) : f.c2, dk = sh(c,.62), ol = sh(c,.34), sz = f.sz || 1;
+  ctx.save(); ctx.translate(x,y+10); ctx.scale(1.1*sz,1.1*sz);
+  E(0,47,48,6,0,"rgba(40,80,130,.22)");
+  ctx.translate(0, mv ? -Math.abs(Math.sin(ph))*7 : Math.sin(t*2+f.seed)*.7); ctx.rotate(mv ? Math.sin(ph)*.06 : 0);
+  const leg = (hx,p,col) => {                                                // short, bouncy tucked gallop legs
+    const a1 = mv ? Math.sin(p)*.95 : 0, a2 = mv ? a1-.9*(1+Math.sin(p+1.1)) : 0, [ex,ey] = limb(hx,10,17,16,a1,a2,10,7,col);
+    if(f.sock){ ctx.lineCap = "round"; for(const [cc,d] of [[ol,3],[col === c ? c2 : sh(c2,.7),0]]){ ctx.strokeStyle = cc; ctx.lineWidth = 7+d; ctx.beginPath(); ctx.moveTo(ex-Math.sin(a2)*8,ey-Math.cos(a2)*8); ctx.lineTo(ex,ey); ctx.stroke(); } }
+    B(ex+2,ey+1,5.5,3.4,0,"#2a1b12");
   };
-  leg(18,14,ph+.5,dk); leg(-20,14,ph+3.3,dk);
-  B(-45,-12,6,12,-.55+(mv ? Math.sin(ph)*.3 : 0),c2);                                // tail
-  const parts = [[-24,-1,19,19],[0,1,28,20],[26,-1,19,21]];
+  leg(18,ph+.5,dk); leg(-18,ph+3.3,dk);
+  B(-38,-12,5,8,-.5+(mv ? Math.sin(ph)*.3 : 0),c2);                           // stubby tail
+  const parts = [[-22,-2,18,18],[0,0,28,18],[22,-1,18,19]];
   ctx.strokeStyle = ol; ctx.lineWidth = 4; parts.forEach(([a,b,rx,ry]) => { ctx.beginPath(); ctx.ellipse(a,b,rx,ry,0,0,7); ctx.stroke(); });
-  let g = ctx.createLinearGradient(0,-22,0,22); g.addColorStop(0,lt(c,.2)); g.addColorStop(.55,c); g.addColorStop(1,sh(c,.7));
+  let g = ctx.createLinearGradient(0,-22,0,20); g.addColorStop(0,lt(c,.2)); g.addColorStop(.55,c); g.addColorStop(1,sh(c,.7));
   ctx.fillStyle = g; parts.forEach(([a,b,rx,ry]) => { ctx.beginPath(); ctx.ellipse(a,b,rx,ry,0,0,7); ctx.fill(); });
-  E(4,13,27,7,0,lt(c,.3));
-  ctx.strokeStyle = "rgba(255,255,255,.2)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-34,-14); ctx.quadraticCurveTo(0,-26,34,-16); ctx.stroke();
-  leg(28,14,ph,c); leg(-28,14,ph+2.7,c);
-  ctx.beginPath(); ctx.moveTo(14,-20); ctx.quadraticCurveTo(30,-36,46,-46); ctx.lineTo(58,-32); ctx.quadraticCurveTo(46,-10,36,10); ctx.closePath();   // neck
+  E(2,11,26,7,0,lt(c,.3));
+  ctx.strokeStyle = "rgba(255,255,255,.2)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-32,-13); ctx.quadraticCurveTo(0,-23,32,-15); ctx.stroke();
+  if(f.spots) [[-12,-8],[6,-10],[16,-2],[-26,0],[-2,4],[24,-8]].forEach(([a,b]) => E(a,b,2.4,2.4,0,sh(c,.72)));
+  if(f.flake){ ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.8; ctx.beginPath(); for(let i=0;i<3;i++){ const a = i*Math.PI/3; ctx.moveTo(-24+Math.cos(a)*6,-6+Math.sin(a)*6); ctx.lineTo(-24-Math.cos(a)*6,-6-Math.sin(a)*6); } ctx.stroke(); }
+  if(f.sparkle) [[-30,-22,0],[-8,-26,2],[12,-20,4]].forEach(([a,b,k]) => { ctx.globalAlpha = .35+.65*Math.abs(Math.sin(t*5+k)); star(a,b,5,"#bfe9ff"); ctx.globalAlpha = 1; });
+  leg(24,ph,c); leg(-24,ph+2.7,c);
+  ctx.strokeStyle = "#5b3416"; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(10,-17); ctx.quadraticCurveTo(18,0,12,18); ctx.moveTo(-10,-17); ctx.quadraticCurveTo(-6,0,-12,18); ctx.stroke();   // harness
+  B(14,6,4,4,0,f.bell); B(-9,6,4,4,0,f.bell);
+  ctx.beginPath(); ctx.moveTo(16,-18); ctx.quadraticCurveTo(28,-30,42,-46); ctx.lineTo(56,-34); ctx.quadraticCurveTo(44,-8,32,10); ctx.closePath();   // thick neck
   ctx.strokeStyle = ol; ctx.lineWidth = 4; ctx.stroke();
-  g = ctx.createLinearGradient(14,-46,50,8); g.addColorStop(0,lt(c,.15)); g.addColorStop(1,sh(c,.8)); ctx.fillStyle = g; ctx.fill();
-  ctx.fillStyle = c2; ctx.strokeStyle = sh(c2,.7); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(57,-31);   // shaggy cream chest ruff
-  for(let i=1;i<=7;i++){ const u = i/7; ctx.lineTo(57-u*22+(i%2 ? 7 : 0), -31+u*43+(mv ? Math.sin(t*5+i)*1.5 : 0)); }
-  ctx.lineTo(34,6); ctx.quadraticCurveTo(44,-12,50,-26); ctx.closePath(); ctx.fill(); ctx.stroke();
+  g = ctx.createLinearGradient(16,-46,50,8); g.addColorStop(0,lt(c,.15)); g.addColorStop(1,sh(c,.8)); ctx.fillStyle = g; ctx.fill();
+  ctx.fillStyle = c2; ctx.strokeStyle = sh(c2,.7); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(55,-33);   // fluffy chest ruff
+  for(let i=1;i<=6;i++){ const u = i/6; ctx.lineTo(55-u*20+(i%2 ? 6 : 0), -33+u*41+(mv ? Math.sin(t*5+i)*1.5 : 0)); }
+  ctx.lineTo(33,8); ctx.quadraticCurveTo(44,-10,49,-26); ctx.closePath(); ctx.fill(); ctx.stroke();
+  B(44,-12,3.6,3.6,0,f.bell);
   jockey(f,ph,mv);
   ctx.translate(0, mv ? Math.sin(ph*2+1)*2 : Math.sin(t*1.5+f.seed));
   const fl = mv ? Math.sin(ph*2)*.15 : 0;
-  antlers(mv ? Math.sin(ph*2)*.06 : 0);
-  B(46,-50,3.6,9,-.7+fl,dk);                                                         // far ear
-  const hp = [[58,-40,12.5,9.5,.4],[69,-34,9.5,6.5,.5]];
+  antlers(f, mv ? Math.sin(ph*2)*.06 : 0);
+  B(41,-49,3.4,8,-.7+fl,dk);
+  const hp = [[50,-40,12.5,9.5,.25],[62,-33,10,7,.35]];                       // big head + boxy snout
   ctx.strokeStyle = ol; ctx.lineWidth = 4; hp.forEach(([a,b,rx,ry,r]) => { ctx.beginPath(); ctx.ellipse(a,b,rx,ry,r,0,7); ctx.stroke(); });
   g = ctx.createLinearGradient(0,-50,0,-26); g.addColorStop(0,lt(c,.2)); g.addColorStop(1,sh(c,.78)); ctx.fillStyle = g;
   hp.forEach(([a,b,rx,ry,r]) => { ctx.beginPath(); ctx.ellipse(a,b,rx,ry,r,0,7); ctx.fill(); });
-  E(71,-32,6,4.2,.5,lt(c,.35));
-  E(60,-43,4.8,5.4,.2,"#fff"); E(61.3,-42.5,2.8,3.4,0,"#1a0f08"); E(62.2,-44,1,1,0,"#fff");   // eye
-  ctx.strokeStyle = ol; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(55,-50); ctx.lineTo(65,-48.5); ctx.stroke();
-  ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(64,-29.5); ctx.quadraticCurveTo(70,-27,75,-30); ctx.stroke();
-  B(51,-50,4.2,10,-.5+fl,c); E(51.5,-50,2,6.5,-.5+fl,"#f0a8a0");                       // near ear
-  ctx.strokeStyle = "#2a1b12"; ctx.lineWidth = 1.7; ctx.beginPath(); ctx.moveTo(53,-47); ctx.lineTo(62,-33); ctx.moveTo(62,-33); ctx.lineTo(70,-30); ctx.stroke();   // bridle
-  E(71,-29.5,2,2,0,"#d4af37");
-  ctx.beginPath(); ctx.moveTo(49,-37); ctx.quadraticCurveTo(60,-29+Math.sin(t*4)*1.5,71,-29.5); ctx.stroke();            // reins
-  const glow = ctx.createRadialGradient(77,-31,1,77,-31,24); glow.addColorStop(0,`rgba(255,60,50,${.55+.25*Math.sin(t*6)})`); glow.addColorStop(1,"rgba(255,60,50,0)");
-  ctx.fillStyle = glow; ctx.fillRect(53,-55,48,48);                                   // glowing red nose
-  B(77,-31.5,4.8,4.6,0,"#ff3b30"); E(75.8,-33,1.7,1.2,0,"#fff");
+  E(63,-32,7,4.6,.35,lt(c,.35));
+  if(f.stripe){ ctx.strokeStyle = "#fff"; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.moveTo(47,-48); ctx.lineTo(58,-38); ctx.stroke(); }
+  if(f.star) star(49,-47,4,"#fff");
+  if(f.spots){ E(46,-42,1.6,1.6,0,sh(c,.7)); E(55,-47,1.5,1.5,0,sh(c,.7)); }
+  E(53,-43,5.2,5.6,0,"#fff"); ctx.strokeStyle = ol; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(53,-43,5.2,5.6,0,0,7); ctx.stroke();
+  E(54.6,-42.5,2.8,3.2,0,"#1a0f08"); E(55.4,-44,1,1,0,"#fff");               // big cartoon eye
+  ctx.strokeStyle = ol; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(48,-50); ctx.lineTo(58,-48.5); ctx.stroke();
+  ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(58,-28.5); ctx.quadraticCurveTo(64,-26,69,-29); ctx.stroke();
+  B(45,-49,4,9.5,-.5+fl,c); E(45.5,-49,2,6,-.5+fl,"#f0a8a0");
+  ctx.strokeStyle = "#3a2a1c"; ctx.lineWidth = 1.7; ctx.beginPath(); ctx.moveTo(46,-46); ctx.lineTo(55,-31); ctx.lineTo(65,-28); ctx.stroke();     // bridle
+  E(66,-28,2,2,0,"#d4af37");
+  ctx.beginPath(); ctx.moveTo(37,-37.5); ctx.quadraticCurveTo(52,-27+Math.sin(t*4)*1.5,66,-28); ctx.stroke();                                         // reins
+  if(f.rn){                                                                    // the one and only red nose
+    const glow = ctx.createRadialGradient(70,-33.5,1,70,-33.5,24); glow.addColorStop(0,`rgba(255,60,50,${.55+.25*Math.sin(t*6)})`); glow.addColorStop(1,"rgba(255,60,50,0)");
+    ctx.fillStyle = glow; ctx.fillRect(46,-58,48,48); B(70,-33.5,4.8,4.6,0,"#ff3b30"); E(68.8,-35,1.7,1.2,0,"#fff");
+  } else { B(70,-34,3.6,3,0,"#2e1c14"); E(69.2,-35,1,.8,0,"rgba(255,255,255,.5)"); }
   ctx.restore();
 }
 </script>
