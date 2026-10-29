@@ -52,6 +52,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #fin.farm .rays{background:repeating-conic-gradient(rgba(255,230,120,.17) 0 10deg,transparent 10deg 20deg)}
 #fin.farm .ft{text-shadow:0 0 20px #ff6fa3,0 0 45px #ffb347}
 #fin.farm .card{background:linear-gradient(#fffaf0,#ffe0c4)}
+#fnote{position:relative;z-index:2;margin-top:12px;max-width:900px;padding:0 16px;text-align:center;font-weight:800;font-size:clamp(.95rem,2vw,1.4rem);text-shadow:0 2px 8px #000;opacity:0;animation:fade .6s 2.8s forwards}
 @keyframes hue{to{filter:hue-rotate(360deg)}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes pulse{to{transform:scale(1.07)}}
@@ -91,6 +92,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
   <div class="ft" id="ftitle">🏁 RACE RESULT 🏁</div>
   <div id="fmsg"></div>
   <div id="pod"></div>
+  <div id="fnote"></div>
   <button id="next">NEXT RACE ▶</button>
 </div>
 <script>
@@ -98,7 +100,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 // Each theme is a set of runners. Add Halloween etc. by adding an entry here.
 const THEMES = {
   christmas: {
-    label: "🎄 Christmas Reindeer Race", scene: sceneSnow, post: pole, puff: ["#fff","rgba(150,190,230,.8)"],
+    label: "🎄 Christmas Reindeer Race", scene: sceneSnow, post: pole, obst: obstSnow, jumpName: "snow bank", waterName: "ice river", puff: ["#fff","rgba(150,190,230,.8)"],
     runners: [
       {n:"Blizzard",c:"#8a5a35",c2:"#f3efe8",s1:"#f58a1f",s2:"#ffd21f",ant:0,sz:1,bell:"#5ec8d0",stripe:true}, {n:"Starlight",c:"#8b4a22",c2:"#8b4a22",s1:"#d8232a",s2:"#ffffff",ant:1,sz:1.03,bell:"#ffd24d",star:true},
       {n:"Snowflake",c:"#6a5648",c2:"#f1f4f6",s1:"#2a6fd6",s2:"#ffffff",ant:2,sz:.94,bell:"#9fd8ff",sock:true,flake:true}, {n:"Twinkle",c:"#f4f6f6",c2:"#f4f6f6",s1:"#8a3fd6",s2:"#ff8ad0",ant:3,sz:.97,bell:"#ff8ad0",sparkle:true},
@@ -106,12 +108,12 @@ const THEMES = {
     ]
   },
   halloween: {
-    label: "🎃 Halloween Monster Race", hw: true, scene: sceneGrave, post: postPumpkin, runner: monster, acc: "#e8680c",
+    label: "🎃 Halloween Monster Race", hw: true, scene: sceneGrave, post: postPumpkin, obst: obstGrave, jumpName: "gravestone", waterName: "swamp", runner: monster, acc: "#e8680c",
     puff: ["#7a6590","rgba(15,8,25,.55)"], hues: [22,38,280,110],
     runners: [{n:"Dracula",k:"dracula"},{n:"Frankenstein",k:"frank"},{n:"Mummy",k:"mummy"},{n:"Werewolf",k:"wolf"},{n:"Ghost",k:"ghost"},{n:"Skeleton",k:"skel"}]
   },
   pigs: {
-    label: "🐷 Pig Race - Muddy Farmyard", cls: "farm", scene: sceneFarm, post: postFarm, runner: pig, acc: "#8b5a2b",
+    label: "🐷 Pig Race - Muddy Farmyard", cls: "farm", scene: sceneFarm, post: postFarm, obst: obstFarm, jumpName: "fence", waterName: "muddy puddle", runner: pig, acc: "#8b5a2b",
     puff: ["#6a4528","rgba(35,20,8,.6)"], hues: [335,25,50,110],
     runners: [
       {n:"Wilbur",k:"pig",m:"plain",c:"#f6a6b8",ring:"#2a6fd6"},
@@ -178,10 +180,12 @@ function buildMenu(){
 /* ============ RACE ENGINE ============ */
 const cv = $("cv"); let ctx = cv.getContext("2d"), noLabel = false;
 const W = 1600, H = 800, TOP = 100, LANE = 104, TRACK_LEN = 13000, START_X = 200;   // logical size; canvas is rendered at screen resolution
-let lastT = 0, snow = [], endT = 0, leadPx = 0;
+let lastT = 0, snow = [], endT = 0, leadPx = 0, gapScale = 1, OBS = [], refuser = null, sinker = null;
+// Chance (0 to 1) that each mishap happens in a race. They are rolled separately, so a race can have both, one, or neither.
+const CHANCE = { refuse: 0.35, sink: 0.35 };
 const RACE_M = 1000, SIGNS = [800,600,400,200,100];   // trackside "metres to go" signs
 const GAP = 650;                              // max on-screen distance behind the leader
-function sx(w){ const lw = START_X+leadPx, d = lw-w; return lw - camX - (d > 0 ? GAP*(1-Math.exp(-d/GAP)) : d); }
+function sx(w){ const lw = START_X+leadPx, d = lw-w; return lw - camX - (d > 0 ? d*gapScale : d); }   // gently squeezes the field only if the pack spreads too wide
 let theme, field = [], racing = false, t0 = 0, camX = 0, finished = [];
 
 function openRace(key){ theme = THEMES[key]; raceNo = 1; $("start").style.display = ""; $("start").textContent = "Start race 1 of " + EVENT_RACES; setTitle(); $("res").textContent = ""; setup(); show("race"); fit(); draw(0); }
@@ -210,13 +214,20 @@ function drawOrder(){
 function run(){
   $("start").style.display = "none"; setTitle();
   setup(); $("res").textContent = "";
-  const order = drawOrder(), base = 42;           // seconds for the winner
-  order.forEach((f,i) => {
-    f.T = base + i*0.9 + Math.random()*0.4; f.omax = 170 - i*28;   // winner coasts furthest, so the finish order stays visible      // set finish time so the drawn order is guaranteed
+  OBS = [[.14,"jump"],[.27,"water"],[.40,"jump"],[.52,"water"],[.64,"jump"],[.76,"water"],[.88,"jump"]]
+    .map(([fr,k]) => ({k, x:START_X+TRACK_LEN*fr, hw:k === "water" ? 150 : 95, H:k === "water" ? 58 : 46}));
+  const jumps = OBS.filter(o => o.k === "jump"), waters = OBS.filter(o => o.k === "water"), pool = [...field], pick = a => a[Math.random()*a.length|0];
+  refuser = sinker = null;
+  if(Math.random() < CHANCE.refuse){ refuser = pool.splice(Math.random()*pool.length|0,1)[0]; const o = pick(jumps); refuser.victim = 1; refuser.stopP = (o.x-o.hw-20-START_X)/TRACK_LEN; }
+  if(Math.random() < CHANCE.sink){ sinker = pool.splice(Math.random()*pool.length|0,1)[0]; const o = pick(waters); sinker.victim = 2; sinker.fallP = (o.x-o.hw-START_X)/TRACK_LEN; }
+  const base = 42, order = drawOrder().filter(f => !f.victim);       // the two unlucky runners never finish
+  order.forEach((f,i) => { f.T = base + i*0.9 + Math.random()*0.4; f.omax = 170 - i*28; });
+  field.forEach(f => {
+    if(f.victim){ f.T = base + 3 + Math.random()*3; f.omax = 0; }
     f.a = [0.018+Math.random()*0.01, 0.012+Math.random()*0.01];   // gentle wobble: speed never drops to zero
     f.p = [Math.random()*6.3, Math.random()*6.3]; f.last = 0;
   });
-  endT = Math.max(...field.map(f => f.T)) + 1.5; lastT = 0;
+  endT = Math.max(...order.map(f => f.T)) + 1.5; lastT = 0; gapScale = 1;
   racing = true; t0 = performance.now(); $("start").disabled = true;
   requestAnimationFrame(tick);
 }
@@ -227,28 +238,64 @@ function progress(f, t){                           // smooth wobble that always 
   return Math.max(f.last, Math.min(v, 1));
 }
 
+function mishaps(){
+  const m = [];
+  if(refuser) m.push(`🛑 ${refuser.n} refused at the ${theme.jumpName}`);
+  if(sinker) m.push(`💧 ${sinker.n} fell in the ${theme.waterName} and sank`);
+  return m.join("   ·   ");
+}
+function splash(f){
+  const x = sx(START_X+f.pos*TRACK_LEN+f.over), y = TOP+f.lane*LANE+LANE/2-12+44;
+  for(let i=0;i<30;i++) snow.push({x, y, vx:(Math.random()-.5)*240, vy:-120-Math.random()*200, l:.9, r:2+Math.random()*3.5, c:"#d4f1ff", s:"rgba(80,150,200,.9)"});
+}
 function tick(now){
   if(!racing) return;
   const t = (now - t0)/1000, dt = Math.max(0, Math.min(t - lastT, .05)); lastT = t;
   field.forEach(f => {
-    f.last = f.pos = progress(f, t);
+    const old = f.pos*TRACK_LEN;
+    let p = progress(f, t);
+    if(f.stopP !== undefined){ const k = 300; p = -Math.log(Math.exp(-k*p)+Math.exp(-k*f.stopP))/k; }   // refuser eases to a halt at its obstacle
+    if(f.fallP !== undefined && f.fellT === undefined && p >= f.fallP) f.fellT = t;
+    if(f.fellT !== undefined) p = f.fallP;
+    f.last = f.pos = p;
+    f.spd = dt > 0 ? (p*TRACK_LEN - old)/dt : 999;
     if(f.pos >= 1 && !f.done){ f.done = true; finished.push(f); }
-    f.over = t > f.T ? f.omax*(1 - Math.exp(-(t - f.T)*1.8)) : 0;   // coast past the line
-    f.mv = t < f.T + 1.3;
-    if(f.mv) f.ph += dt*12*(t < f.T ? 1 : Math.max(0, 1 - (t - f.T)/1.3));
+    if(f.fellT !== undefined){                                                   // the sinker: short leap, splash, sinks
+      const e = t - f.fellT; f.fe = e; f.over = 60*(1 - Math.exp(-e*3)); f.mv = false;
+      f.jy = e < .5 ? 46*Math.sin(Math.PI*e/.5) : -(e-.5)*70; f.gone = e > 2.4;
+      f.note = e > .5 && e < 2.8 ? "SPLASH!" : "";
+      if(e > .5 && !f.splashed){ f.splashed = true; splash(f); }
+    } else {
+      f.over = f.victim ? 0 : (t > f.T ? f.omax*(1 - Math.exp(-(t - f.T)*1.8)) : 0);   // coast past the line
+      if(f.stopP !== undefined && !f.stopped && f.pos > f.stopP-.02 && f.spd < 35) f.stopped = true;
+      f.mv = f.victim ? !f.stopped : t < f.T + 1.3;
+      const wx = START_X + f.pos*TRACK_LEN; f.jy = 0;
+      for(const o of OBS){ const d = wx - o.x; if(Math.abs(d) < o.hw) f.jy = Math.max(f.jy, o.H*(1-(d/o.hw)**2)); }   // jump arc over every obstacle
+      f.note = f.stopped ? "REFUSED!" : "";
+    }
+    f.air = f.jy !== 0;
+    if(f.mv){ if(f.jy > 2) f.ph = Math.PI/2;                                      // legs stretched out mid-air
+      else f.ph += dt*12*(f.victim ? Math.min(1, f.spd/160) : (t < f.T ? 1 : Math.max(0, 1 - (t - f.T)/1.3))); }
   });
   leadPx = Math.max(...field.map(f => f.pos*TRACK_LEN + f.over));
+  const act = field.filter(f => !f.stopped && !f.gone && f.fellT === undefined), minAct = Math.min(...act.map(f => f.pos*TRACK_LEN + f.over));
+  gapScale += (Math.min(1, GAP/Math.max(1, leadPx - minAct)) - gapScale)*Math.min(1, dt*4);
   const prev = camX;
   camX = Math.max(0, Math.min(leadPx - W*0.64, TRACK_LEN + START_X + 260 - W));
-  snow.forEach(p => { p.x += p.vx*dt - (camX - prev); p.y += p.vy*dt; p.vy += 140*dt; p.l -= dt; });
-  field.forEach(f => { if(f.mv && f.k !== "ghost" && Math.random() < dt*30)
-    snow.push({x:sx(START_X+f.pos*TRACK_LEN+f.over)-20, y:TOP+f.lane*LANE+LANE/2+38+Math.random()*6, vx:-40-Math.random()*70, vy:-30-Math.random()*60, l:.6, r:2+Math.random()*3}); });
+  snow.forEach(p => { p.x += p.vx*dt - (camX - prev); p.y += p.vy*dt; p.vy += (p.g === undefined ? 140 : p.g)*dt; p.l -= dt; });
+  field.forEach(f => {
+    const py = TOP+f.lane*LANE+LANE/2-12;
+    if(f.mv && !f.air && f.k !== "ghost" && Math.random() < dt*30)
+      snow.push({x:sx(START_X+f.pos*TRACK_LEN+f.over)-20, y:py+38+Math.random()*6, vx:-40-Math.random()*70, vy:-30-Math.random()*60, l:.6, r:2+Math.random()*3});
+    if(f.fe > .5 && f.fe < 3 && Math.random() < dt*16)                           // bubbles from the sinker
+      snow.push({x:sx(START_X+f.pos*TRACK_LEN+f.over)+(Math.random()-.5)*40, y:py+44, vx:(Math.random()-.5)*20, vy:-40, g:-20, l:.9, r:2+Math.random()*2.5, c:"rgba(215,243,255,.8)", s:"rgba(90,150,200,.9)"});
+  });
   snow = snow.filter(p => p.l > 0);
   draw(t);
   if(t < endT) return requestAnimationFrame(tick);
   racing = false; $("start").disabled = false;
   const w = finished[0]; setTimeout(showFinish, 900);
-  $("res").textContent = `🏆 ${w.n} wins at ${w.odds}/1!  2nd: ${finished[1].n}  3rd: ${finished[2].n}`;
+  $("res").textContent = `🏆 ${w.n} wins at ${w.odds}/1!  2nd: ${finished[1].n}  3rd: ${finished[2].n}` + (mishaps() ? "   ·   " + mishaps() : "");
 }
 
 /* ============ FINISH SCREEN ============ */
@@ -259,7 +306,7 @@ function portrait(f){                       // reuse deer() to paint a close-up
   ctx = real; noLabel = false; return c;
 }
 function showFinish(){
-  const pod = $("pod"); pod.innerHTML = "";
+  const pod = $("pod"); pod.innerHTML = ""; $("fnote").textContent = mishaps();
   const last = raceNo >= EVENT_RACES;
   $("ftitle").textContent = last ? "🏁 FINAL RACE RESULT 🏁" : `🏁 RACE ${raceNo} OF ${EVENT_RACES} 🏁`;
   $("fmsg").textContent = last ? "That was the last race of the event! Update your sheets and pay your winnings." : "Update your sheets, pay your winnings and when you are ready start the next race.";
@@ -334,8 +381,20 @@ function draw(t){
   ctx.fillStyle = "#5a3a22"; ctx.fillRect(fx-6,TOP-84,8,74);
   ctx.fillStyle = theme.acc || "#d8232a"; ctx.beginPath(); ctx.roundRect(fx-80,TOP-92,170,36,8); ctx.fill();
   ctx.fillStyle = "#fff"; ctx.font = "bold 26px system-ui"; ctx.textAlign = "center"; ctx.fillText("FINISH",fx+5,TOP-66); ctx.textAlign = "left";
-  field.forEach(f => { const px = sx(START_X + f.pos*TRACK_LEN + f.over), py = TOP + f.lane*LANE + LANE/2 - 12; label(f,px,py); (theme.runner || deer)(f,px,py,t); });
-  snow.forEach(p => { ctx.globalAlpha = Math.min(1,p.l/.4); E(p.x,p.y,p.r,p.r,0,theme.puff[0]); ctx.strokeStyle = theme.puff[1]; ctx.lineWidth = 1; ctx.stroke(); });
+  for(const o of OBS){ const gx = sx(o.x); if(gx > -330 && gx < W+330) theme.obst(o,gx,t); }
+  field.forEach(f => {
+    const px = sx(START_X + f.pos*TRACK_LEN + f.over), py = TOP + f.lane*LANE + LANE/2 - 12;
+    label(f,px,py);
+    if(f.gone) return;
+    if(f.jy > 1) E(px,py+48,46*(1-Math.min(.6,f.jy/110)),6,0,"rgba(0,0,0,.25)");
+    ctx.save();
+    if(f.fellT !== undefined){ ctx.beginPath(); ctx.rect(px-260,py-300,520,344); ctx.clip(); }   // sinks below the water surface
+    ctx.translate(0,-(f.jy || 0)); (theme.runner || deer)(f,px,py,t);
+    ctx.restore();
+    if(f.fe > .5 && f.fe < 3){ for(const k of [0,.5,1]){ const u = f.fe-.5-k*.4; if(u > 0 && u < 1.2){ ctx.strokeStyle = `rgba(255,255,255,${.75*(1-u/1.2)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(px,py+44,20+u*50,5+u*10,0,0,7); ctx.stroke(); } } }
+    if(f.note) bubble(px,py-95,f.note);
+  });
+  snow.forEach(p => { ctx.globalAlpha = Math.min(1,p.l/.4); E(p.x,p.y,p.r,p.r,0,p.c || theme.puff[0]); ctx.strokeStyle = p.s || theme.puff[1]; ctx.lineWidth = 1; ctx.stroke(); });
   ctx.globalAlpha = 1;
 }
 
@@ -485,7 +544,7 @@ function limb(x0,y0,l1,l2,a1,a2,w1,w2,c,o){
 function ghost(f,x,y,t){
   const mv = f.mv, ph = f.ph || 0, fl = Math.sin(t*3+f.seed)*5, body = "rgba(250,252,255,.95)";
   ctx.save(); ctx.translate(x,y); ctx.scale(1.1,1.1);
-  E(0,59,26-fl*.3,5,0,"rgba(0,0,0,.35)");
+  if(!f.air) E(0,59,26-fl*.3,5,0,"rgba(0,0,0,.35)");
   ctx.translate(0,-10+fl+(mv ? Math.sin(ph*2)*3 : 0)); ctx.rotate(mv ? .1 : 0);
   const gl = ctx.createRadialGradient(2,-10,5,2,-10,62); gl.addColorStop(0,"rgba(190,230,255,.5)"); gl.addColorStop(1,"rgba(190,230,255,0)");
   ctx.fillStyle = gl; ctx.fillRect(-60,-72,124,124);
@@ -502,7 +561,7 @@ function monster(f,x,y,t){
   if(f.k === "ghost") return ghost(f,x,y,t);
   const mv = f.mv, ph = f.ph || 0, k = f.k, P = MON[k], sk = k === "skel", th = sk ? [6,5] : [12,10], dk = sh(P.legs,.7);
   ctx.save(); ctx.translate(x,y); ctx.scale(1.1,1.1);
-  E(0,59,30,6,0,"rgba(0,0,0,.4)");
+  if(!f.air) E(0,59,30,6,0,"rgba(0,0,0,.4)");
   ctx.translate(0, mv ? -Math.abs(Math.sin(ph))*6 : Math.sin(t*2+f.seed)*.7); ctx.rotate(mv ? .07 : 0);
   const leg = (p,c) => { const a1 = mv ? Math.sin(p)*.9 : 0, [ex,ey] = limb(0,16,21,22,a1,mv ? a1-.8*(1+Math.sin(p+1.3)) : 0,th[0]+2,th[1]+1,c); B(ex+4,ey+1,sk ? 6 : 9,4.5,0,P.shoe); };
   const arm = (p,c) => { const a1 = mv ? Math.sin(p) : .15, [ex,ey] = limb(3,-22,15,14,a1,a1+(mv ? .9 : .3),th[0]-1,th[1]-1,c); B(ex,ey,sk ? 3.5 : 6,sk ? 3.5 : 6,0,P.hand); };
@@ -645,7 +704,7 @@ function pig(f,x,y,t){                       // chubby cartoon pig: big head, ou
   const ol = dark ? sh(c,.4) : `rgb(${px(c).map((v,i) => Math.round(v*.2+[90,26,46][i]*.8))})`, dk = sh(c,.8);
   const flap = mv ? Math.sin(ph*2)*.35 : Math.sin(t*2+f.seed)*.06;
   ctx.save(); ctx.translate(x,y+8); ctx.scale(1.25,1.25);
-  E(0,41,52,6,0,"rgba(30,15,5,.3)");
+  if(!f.air) E(0,41,52,6,0,"rgba(30,15,5,.3)");
   ctx.translate(0, mv ? -Math.abs(Math.sin(ph))*7 : Math.sin(t*2+f.seed)*.8);
   if(mv){ const q = Math.sin(ph*2)*.03; ctx.scale(1+q,1-q); }
   ctx.rotate(mv ? Math.sin(ph)*.05 : 0);
@@ -691,6 +750,53 @@ function pig(f,x,y,t){                       // chubby cartoon pig: big head, ou
   ctx.strokeStyle = sh(ec,.82); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-2,-2); ctx.quadraticCurveTo(2,-12,10,-14); ctx.stroke(); ctx.restore();       // floppy folded ear
   ctx.restore();
 }
+function bubble(x,y,txt){
+  ctx.save(); ctx.font = "bold 20px system-ui"; const w = ctx.measureText(txt).width+22;
+  ctx.fillStyle = "#fff"; ctx.strokeStyle = "#d32f2f"; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(x-w/2,y-30,w,32,10); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x-7,y+1); ctx.lineTo(x,y+12); ctx.lineTo(x+7,y+1); ctx.fillStyle = "#fff"; ctx.fill();
+  ctx.fillStyle = "#d32f2f"; ctx.textAlign = "center"; ctx.fillText(txt,x,y-8); ctx.restore();
+}
+function waterBand(o,gx,t,c0,c1,c2){         // full-width river/puddle/swamp strip across every lane
+  const hw = o.hw*.85, y0 = TOP-14, y1 = TOP+LANE*6+10;
+  const g = ctx.createLinearGradient(gx-hw,0,gx+hw,0); g.addColorStop(0,c0); g.addColorStop(.5,c1); g.addColorStop(1,c0);
+  ctx.fillStyle = g; ctx.fillRect(gx-hw,y0,hw*2,y1-y0);
+  ctx.strokeStyle = c2; ctx.lineWidth = 2;
+  for(let i=0;i<14;i++){ const yy = y0+((i*53+t*18)%(y1-y0)); ctx.beginPath(); ctx.moveTo(gx-hw+10+(i%3)*20,yy); ctx.quadraticCurveTo(gx,yy-6,gx+hw-10-(i%4)*14,yy+2); ctx.stroke(); }
+  return hw;
+}
+function obstSnow(o,gx,t){
+  if(o.k === "jump"){                                                          // a snow bank in every lane
+    for(let i=0;i<6;i++){ const gy = TOP+i*LANE+LANE/2+40, w = 66;
+      const g = ctx.createLinearGradient(0,gy-46,0,gy); g.addColorStop(0,"#fff"); g.addColorStop(1,"#bcd6ee");
+      ctx.fillStyle = g; ctx.strokeStyle = "#8fb4d4"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(gx-w,gy); ctx.quadraticCurveTo(gx-w*.6,gy-54,gx,gy-46); ctx.quadraticCurveTo(gx+w*.6,gy-54,gx+w,gy); ctx.closePath(); ctx.fill(); ctx.stroke();
+      E(gx-14,gy-34,12,4,-.4,"rgba(255,255,255,.95)"); }
+  } else {                                                                      // ice river with floes along the banks
+    const hw = waterBand(o,gx,t,"#a6e6ff","#3fb3e6","rgba(255,255,255,.55)");
+    for(const sd of [-1,1]) for(let y = TOP-6; y < TOP+LANE*6+10; y += 34){ E(gx+sd*(hw-2),y,15,11,.3*sd,"#e8f7ff"); E(gx+sd*(hw-2),y-2,9,5,0,"#fff"); }
+  }
+}
+function obstFarm(o,gx,t){
+  if(o.k === "jump"){                                                          // a wooden hurdle fence in every lane
+    for(let i=0;i<6;i++){ const gy = TOP+i*LANE+LANE/2+40;
+      ctx.lineWidth = 2; ctx.strokeStyle = "#4a2e12";
+      for(const px of [-36,36]){ ctx.fillStyle = "#8b5a2b"; ctx.fillRect(gx+px-5,gy-54,10,58); ctx.strokeRect(gx+px-5,gy-54,10,58); }
+      for(const ry of [-48,-26]){ ctx.fillStyle = "#c58a58"; ctx.fillRect(gx-42,gy+ry,84,10); ctx.strokeRect(gx-42,gy+ry,84,10); } }
+  } else {                                                                      // big muddy puddle
+    const hw = waterBand(o,gx,t,"#6d5740","#9a8466","rgba(255,255,255,.3)");
+    for(const sd of [-1,1]) for(let y = TOP-6; y < TOP+LANE*6+10; y += 30) E(gx+sd*(hw-2),y,14,10,.3*sd,"#4a2f1a");
+  }
+}
+function obstGrave(o,gx,t){
+  if(o.k === "jump"){ for(let i=0;i<6;i++){ const gy = TOP+i*LANE+LANE/2+42; grave(gx,gy,58,.1,"#7c7896"); E(gx-12,gy-6,9,4,0,"rgba(90,140,70,.6)"); } }   // a gravestone in every lane
+  else {                                                                        // glowing green swamp
+    const hw = waterBand(o,gx,t,"#1d3a22","#3b6a34","rgba(170,255,140,.25)");
+    for(let i=0;i<9;i++){ const yy = TOP+10+i*(LANE*6/9), xx = gx+(i%3-1)*hw*.5; E(xx,yy,16,7,0,"#55914a"); E(xx,yy,16,7,0,"rgba(0,0,0,.15)"); }
+    for(let i=0;i<10;i++){ const q = (t*.7+i*.37)%1; ctx.strokeStyle = "rgba(190,255,160,.7)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(gx+(hash(i+o.x)-.5)*hw*1.6,TOP+60+((i*61)%(LANE*5))-q*14,3+q*3,0,7); ctx.stroke(); }
+    for(const [ex,ey] of [[-.4,1.5],[.45,3.4],[-.2,5]]){ const on = Math.sin(t*2+ey) > -.3; if(on){ E(gx+ex*hw,TOP+ey*LANE,3,2,0,"#ffe14d"); E(gx+ex*hw+9,TOP+ey*LANE,3,2,0,"#ffe14d"); } }
+    ctx.strokeStyle = "#1b2a14"; ctx.lineWidth = 3;
+    for(const sd of [-1,1]) for(let y = TOP; y < TOP+LANE*6; y += 40){ ctx.beginPath(); ctx.moveTo(gx+sd*(hw-4),y+12); ctx.lineTo(gx+sd*(hw-4)+sd*3,y-8); ctx.stroke(); }
+  }
+}
 function star(x,y,r,c){ ctx.fillStyle = c; ctx.beginPath(); for(let i=0;i<10;i++){ const a = -Math.PI/2+i*Math.PI/5, rr = i%2 ? r*.45 : r; ctx[i ? "lineTo" : "moveTo"](x+Math.cos(a)*rr,y+Math.sin(a)*rr); } ctx.fill(); }
 const ANT = [   // six different antler shapes
   [[[0,0],[-3,-14],[-8,-30]],[[-3,-14],[5,-22]],[[-8,-30],[-17,-38]],[[-8,-30],[-6,-42]],[[-8,-30],[2,-38]]],
@@ -723,7 +829,7 @@ function jockey(f,ph,mv){
 function deer(f,x,y,t){
   const mv = f.mv, ph = f.ph || 0, c = f.c, c2 = f.c2 === f.c ? lt(f.c,.5) : f.c2, dk = sh(c,.62), ol = sh(c,.34), sz = f.sz || 1;
   ctx.save(); ctx.translate(x,y+10); ctx.scale(1.1*sz,1.1*sz);
-  E(0,47,48,6,0,"rgba(40,80,130,.22)");
+  if(!f.air) E(0,47,48,6,0,"rgba(40,80,130,.22)");
   ctx.translate(0, mv ? -Math.abs(Math.sin(ph))*7 : Math.sin(t*2+f.seed)*.7); ctx.rotate(mv ? Math.sin(ph)*.06 : 0);
   const leg = (hx,p,col) => {                                                // short, bouncy tucked gallop legs
     const a1 = mv ? Math.sin(p)*.95 : 0, a2 = mv ? a1-.9*(1+Math.sin(p+1.1)) : 0, [ex,ey] = limb(hx,10,17,16,a1,a2,10,7,col);
