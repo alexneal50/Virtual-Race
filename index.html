@@ -27,23 +27,24 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #fin .bg{position:absolute;inset:0;background:radial-gradient(circle at 50% 40%,#1e7be8,#0a1f5c 60%,#050d2e);animation:hue 8s linear infinite}
 #fin .rays{position:absolute;left:50%;top:42%;width:250vmax;height:250vmax;margin:-125vmax 0 0 -125vmax;background:repeating-conic-gradient(rgba(255,255,255,.16) 0 10deg,transparent 10deg 20deg);animation:spin 24s linear infinite}
 #conf{position:absolute;inset:0;z-index:3;pointer-events:none}
-.ft{position:relative;z-index:2;font-size:clamp(1.8rem,6vw,4rem);font-weight:900;letter-spacing:2px;text-align:center;text-shadow:0 0 20px #ffd84d,0 0 45px #ff9d00;animation:pulse 1s ease-in-out infinite alternate}
-#pod{position:relative;z-index:2;display:flex;align-items:flex-end;gap:clamp(8px,1.6vw,22px);margin:16px 0 0}
-.card{width:clamp(90px,16vw,200px);background:linear-gradient(#fff,#c9f1ff);border-radius:18px;padding:8px 8px 12px;text-align:center;color:#06435c;opacity:0;border:5px solid #cd7f32;animation:pop .7s cubic-bezier(.2,1.6,.4,1) forwards}
+.ft{position:relative;z-index:2;font-size:clamp(1.3rem,min(6vw,6.4vh),4rem);font-weight:900;letter-spacing:2px;text-align:center;text-shadow:0 0 20px #ffd84d,0 0 45px #ff9d00;animation:pulse 1s ease-in-out infinite alternate}
+#pod{position:relative;z-index:2;display:flex;align-items:flex-end;gap:clamp(6px,1.6vw,22px);margin:1.4vh 0 0}
+.card{container-type:inline-size;width:clamp(76px,min(16vw,19vh),200px);background:linear-gradient(#fff,#c9f1ff);border-radius:18px;padding:8px 8px 12px;text-align:center;color:#06435c;opacity:0;border:5px solid #cd7f32;animation:pop .7s cubic-bezier(.2,1.6,.4,1) forwards}
 .card canvas{width:100%;height:auto;display:block}
 .card.p3{animation-delay:.3s}
 .card.p2{animation-delay:1.2s;border-color:#c0c0c0;box-shadow:0 0 25px #dfe}
-.card.p1{width:clamp(110px,20vw,250px);border-color:gold;animation:pop .7s cubic-bezier(.2,1.6,.4,1) 2.4s forwards,glow .9s ease-in-out 3.1s infinite alternate}
-.med{font-size:clamp(1.3rem,3.2vw,2.2rem);animation:bob 1s ease-in-out infinite alternate}
-.nm{font-size:clamp(.9rem,2.1vw,1.5rem);font-weight:900}
-.od{display:inline-block;margin:4px 0;padding:2px 12px;border-radius:99px;background:#06435c;color:#ffd84d;font-weight:800;font-size:clamp(.8rem,1.7vw,1.15rem)}
-.pl{font-size:clamp(1.1rem,3vw,2rem);font-weight:900;color:#e0a800}
+.card.p1{width:clamp(92px,min(20vw,24vh),250px);border-color:gold;animation:pop .7s cubic-bezier(.2,1.6,.4,1) 2.4s forwards,glow .9s ease-in-out 3.1s infinite alternate}
+.med{font-size:clamp(1.1rem,min(3.2vw,4vh),2.2rem);animation:bob 1s ease-in-out infinite alternate}
+.nm{white-space:nowrap;font-size:min(10.5cqw,1.5rem);font-weight:900}
+.od{display:inline-block;margin:4px 0;padding:2px 12px;border-radius:99px;background:#06435c;color:#ffd84d;font-weight:800;font-size:min(8.5cqw,1.15rem);white-space:nowrap}
+.pl{font-size:min(15cqw,2rem);font-weight:900;color:#e0a800}
 .p1 .pl{background:linear-gradient(90deg,#ffd84d,#fff,#ffd84d);background-size:200%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 1.5s linear infinite;-webkit-text-stroke:1px #b88400}
-#fin{padding-bottom:110px}
-#fmsg{position:relative;z-index:2;max-width:900px;margin-top:10px;padding:0 16px;text-align:center;font-size:clamp(1.1rem,2.6vw,1.9rem);font-weight:800;text-shadow:0 2px 8px #000;opacity:0;animation:fade .6s .4s forwards}
-#next{position:absolute;z-index:4;bottom:18px;left:50%;transform:translateX(-50%);width:min(92vw,720px);padding:clamp(14px,3vh,26px);font-size:clamp(1.5rem,5vw,2.6rem);font-weight:900;letter-spacing:2px;color:#4a2f00;background:linear-gradient(#ffe680,#ffb400);border:4px solid #fff;border-radius:18px;opacity:0;animation:fade .6s 3.6s forwards,beat .8s ease-in-out 4.2s infinite alternate}
+#fin{padding:12px 16px 18px;justify-content:flex-start}
+#fmain{position:relative;z-index:2;flex:1;min-height:0;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#fmsg{position:relative;z-index:2;max-width:900px;margin-top:10px;padding:0 16px;text-align:center;font-size:clamp(.85rem,min(2.6vw,3vh),1.9rem);font-weight:800;text-shadow:0 2px 8px #000;opacity:0;animation:fade .6s .4s forwards}
+#next{position:relative;z-index:4;flex:none;margin-top:10px;width:min(92vw,720px);padding:clamp(8px,2vh,26px);font-size:clamp(1.2rem,min(5vw,5.4vh),2.6rem);font-weight:900;letter-spacing:2px;color:#4a2f00;background:linear-gradient(#ffe680,#ffb400);border:4px solid #fff;border-radius:18px;opacity:0;animation:fade .6s 3.6s forwards,beat .8s ease-in-out 4.2s infinite alternate}
 #next:disabled{cursor:wait}
-@keyframes beat{to{box-shadow:0 0 40px 10px #ffd84d;transform:translateX(-50%) scale(1.03)}}
+@keyframes beat{to{box-shadow:0 0 40px 10px #ffd84d;transform:scale(1.03)}}
 #fin.hw .bg{background:radial-gradient(circle at 50% 40%,#8a2be2,#2a0a4a 58%,#08020f);animation:none}
 #fin.hw .rays{background:repeating-conic-gradient(rgba(255,150,40,.17) 0 10deg,transparent 10deg 20deg)}
 #fin.hw .ft{text-shadow:0 0 20px #ff7a00,0 0 45px #ff4d00}
@@ -52,7 +53,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #fin.farm .rays{background:repeating-conic-gradient(rgba(255,230,120,.17) 0 10deg,transparent 10deg 20deg)}
 #fin.farm .ft{text-shadow:0 0 20px #ff6fa3,0 0 45px #ffb347}
 #fin.farm .card{background:linear-gradient(#fffaf0,#ffe0c4)}
-#fnote{position:relative;z-index:2;margin-top:12px;max-width:900px;padding:0 16px;text-align:center;font-weight:800;font-size:clamp(.95rem,2vw,1.4rem);text-shadow:0 2px 8px #000;opacity:0;animation:fade .6s 2.8s forwards}
+#fnote{position:relative;z-index:2;margin-top:1.4vh;max-width:min(92vw,900px);padding:.7vh 20px;border-radius:14px;background:rgba(0,0,0,.42);border:2px solid rgba(255,255,255,.35);text-align:center;font-weight:800;font-size:clamp(.8rem,min(2vw,2.5vh),1.4rem);line-height:1.45;white-space:pre-line;text-shadow:0 2px 6px #000;opacity:0;animation:fade .6s 2.8s forwards}
+#fnote:empty{display:none}
 @keyframes hue{to{filter:hue-rotate(360deg)}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes pulse{to{transform:scale(1.07)}}
@@ -89,10 +91,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
 
 <div id="fin">
   <div class="bg"></div><div class="rays"></div><canvas id="conf"></canvas>
-  <div class="ft" id="ftitle">🏁 RACE RESULT 🏁</div>
-  <div id="fmsg"></div>
-  <div id="pod"></div>
-  <div id="fnote"></div>
+  <div id="fmain">
+    <div class="ft" id="ftitle">🏁 RACE RESULT 🏁</div>
+    <div id="fmsg"></div>
+    <div id="pod"></div>
+    <div id="fnote"></div>
+  </div>
   <button id="next">NEXT RACE ▶</button>
 </div>
 <script>
@@ -185,7 +189,8 @@ let lastT = 0, snow = [], endT = 0, leadPx = 0, gapScale = 1, OBS = [], refuser 
 const CHANCE = { refuse: 0.35, sink: 0.35 };
 const RACE_M = 1000, SIGNS = [800,600,400,200,100];   // trackside "metres to go" signs
 const GAP = 650;                              // max on-screen distance behind the leader
-function sx(w){ const lw = START_X+leadPx, d = lw-w; return lw - camX - (d > 0 ? d*gapScale : d); }   // gently squeezes the field only if the pack spreads too wide
+function sx(w){ return w - camX; }                       // one true mapping: track, obstacles, signs and runners all share it
+const SQ0 = 450, SQK = .3, squeeze = d => d <= SQ0 ? d : SQ0 + (d-SQ0)*SQK;   // keeps a long way back runners on screen by really closing the gap
 let theme, field = [], racing = false, t0 = 0, camX = 0, finished = [];
 
 function openRace(key){ theme = THEMES[key]; raceNo = 1; $("start").style.display = ""; $("start").textContent = "Start race 1 of " + EVENT_RACES; setTitle(); $("res").textContent = ""; setup(); show("race"); fit(); draw(0); }
@@ -196,7 +201,7 @@ function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.random()*(i+1)|
 
 function setup(){
   // New race: shuffle who's favourite, then lane 0 = 1/1 ... lane 5 = 10/1
-  field = shuffle([...theme.runners]).map((r,i) => ({...r, odds:ODDS[i], lane:i, pos:0, ph:Math.random()*6, over:0, mv:false, seed:Math.random()*6}));
+  field = shuffle([...theme.runners]).map((r,i) => ({...r, odds:ODDS[i], lane:i, pos:0, ph:Math.random()*6, over:0, mv:false, seed:Math.random()*6, wx:START_X}));
   finished = []; camX = 0; snow = []; leadPx = 0;
 }
 
@@ -224,7 +229,7 @@ function run(){
   order.forEach((f,i) => { f.T = base + i*0.9 + Math.random()*0.4; f.omax = 170 - i*28; });
   field.forEach(f => {
     if(f.victim){ f.T = base + 3 + Math.random()*3; f.omax = 0; }
-    f.a = [0.018+Math.random()*0.01, 0.012+Math.random()*0.01];   // gentle wobble: speed never drops to zero
+    f.a = [0.012+Math.random()*0.008, 0.008+Math.random()*0.008];   // gentle wobble: speed never drops to zero
     f.p = [Math.random()*6.3, Math.random()*6.3]; f.last = 0;
   });
   endT = Math.max(...order.map(f => f.T)) + 1.5; lastT = 0; gapScale = 1;
@@ -238,20 +243,20 @@ function progress(f, t){                           // smooth wobble that always 
   return Math.max(f.last, Math.min(v, 1));
 }
 
-function mishaps(){
+function mishaps(sep = "   ·   "){
   const m = [];
   if(refuser) m.push(`🛑 ${refuser.n} refused at the ${theme.jumpName}`);
   if(sinker) m.push(`💧 ${sinker.n} fell in the ${theme.waterName} and sank`);
-  return m.join("   ·   ");
+  return m.join(sep);
 }
 function splash(f){
-  const x = sx(START_X+f.pos*TRACK_LEN+f.over), y = TOP+f.lane*LANE+LANE/2-12+44;
+  const x = sx(f.wx), y = TOP+f.lane*LANE+LANE/2-12+44;
   for(let i=0;i<30;i++) snow.push({x, y, vx:(Math.random()-.5)*240, vy:-120-Math.random()*200, l:.9, r:2+Math.random()*3.5, c:"#d4f1ff", s:"rgba(80,150,200,.9)"});
 }
 function tick(now){
   if(!racing) return;
   const t = (now - t0)/1000, dt = Math.max(0, Math.min(t - lastT, .05)); lastT = t;
-  field.forEach(f => {
+  field.forEach(f => {                                                          // 1) each runner's own progress
     const old = f.pos*TRACK_LEN;
     let p = progress(f, t);
     if(f.stopP !== undefined){ const k = 300; p = -Math.log(Math.exp(-k*p)+Math.exp(-k*f.stopP))/k; }   // refuser eases to a halt at its obstacle
@@ -264,31 +269,37 @@ function tick(now){
       const e = t - f.fellT; f.fe = e; f.over = 60*(1 - Math.exp(-e*3)); f.mv = false;
       f.jy = e < .5 ? 46*Math.sin(Math.PI*e/.5) : -(e-.5)*70; f.gone = e > 2.4;
       f.note = e > .5 && e < 2.8 ? "SPLASH!" : "";
-      if(e > .5 && !f.splashed){ f.splashed = true; splash(f); }
+      if(e > .5 && !f.splashed){ f.splashed = true; f.wx = START_X + f.pos*TRACK_LEN + f.over; splash(f); }
     } else {
       f.over = f.victim ? 0 : (t > f.T ? f.omax*(1 - Math.exp(-(t - f.T)*1.8)) : 0);   // coast past the line
       if(f.stopP !== undefined && !f.stopped && f.pos > f.stopP-.02 && f.spd < 35) f.stopped = true;
       f.mv = f.victim ? !f.stopped : t < f.T + 1.3;
-      const wx = START_X + f.pos*TRACK_LEN; f.jy = 0;
-      for(const o of OBS){ const d = wx - o.x; if(Math.abs(d) < o.hw) f.jy = Math.max(f.jy, o.H*(1-(d/o.hw)**2)); }   // jump arc over every obstacle
+    }
+    f.rw = f.pos*TRACK_LEN + f.over;
+  });
+  const leadA = Math.max(...field.filter(f => !f.victim).map(f => f.rw));
+  field.forEach(f => {                                                          // 2) where they really are on the course
+    f.ew = f.victim ? f.rw : leadA - squeeze(leadA - f.rw);
+    f.wx = START_X + f.ew;
+    if(f.fellT === undefined){
+      f.jy = 0;
+      for(const o of OBS){ const d = f.wx - o.x; if(Math.abs(d) < o.hw) f.jy = Math.max(f.jy, o.H*(1-(d/o.hw)**2)); }   // jump arc over every obstacle
       f.note = f.stopped ? "REFUSED!" : "";
     }
     f.air = f.jy !== 0;
     if(f.mv){ if(f.jy > 2) f.ph = Math.PI/2;                                      // legs stretched out mid-air
       else f.ph += dt*12*(f.victim ? Math.min(1, f.spd/160) : (t < f.T ? 1 : Math.max(0, 1 - (t - f.T)/1.3))); }
   });
-  leadPx = Math.max(...field.map(f => f.pos*TRACK_LEN + f.over));
-  const act = field.filter(f => !f.stopped && !f.gone && f.fellT === undefined), minAct = Math.min(...act.map(f => f.pos*TRACK_LEN + f.over));
-  gapScale += (Math.min(1, GAP/Math.max(1, leadPx - minAct)) - gapScale)*Math.min(1, dt*4);
+  leadPx = Math.max(...field.map(f => f.ew));
   const prev = camX;
   camX = Math.max(0, Math.min(leadPx - W*0.64, TRACK_LEN + START_X + 260 - W));
   snow.forEach(p => { p.x += p.vx*dt - (camX - prev); p.y += p.vy*dt; p.vy += (p.g === undefined ? 140 : p.g)*dt; p.l -= dt; });
   field.forEach(f => {
     const py = TOP+f.lane*LANE+LANE/2-12;
     if(f.mv && !f.air && f.k !== "ghost" && Math.random() < dt*30)
-      snow.push({x:sx(START_X+f.pos*TRACK_LEN+f.over)-20, y:py+38+Math.random()*6, vx:-40-Math.random()*70, vy:-30-Math.random()*60, l:.6, r:2+Math.random()*3});
+      snow.push({x:sx(f.wx)-20, y:py+38+Math.random()*6, vx:-40-Math.random()*70, vy:-30-Math.random()*60, l:.6, r:2+Math.random()*3});
     if(f.fe > .5 && f.fe < 3 && Math.random() < dt*16)                           // bubbles from the sinker
-      snow.push({x:sx(START_X+f.pos*TRACK_LEN+f.over)+(Math.random()-.5)*40, y:py+44, vx:(Math.random()-.5)*20, vy:-40, g:-20, l:.9, r:2+Math.random()*2.5, c:"rgba(215,243,255,.8)", s:"rgba(90,150,200,.9)"});
+      snow.push({x:sx(f.wx)+(Math.random()-.5)*40, y:py+44, vx:(Math.random()-.5)*20, vy:-40, g:-20, l:.9, r:2+Math.random()*2.5, c:"rgba(215,243,255,.8)", s:"rgba(90,150,200,.9)"});
   });
   snow = snow.filter(p => p.l > 0);
   draw(t);
@@ -306,7 +317,7 @@ function portrait(f){                       // reuse deer() to paint a close-up
   ctx = real; noLabel = false; return c;
 }
 function showFinish(){
-  const pod = $("pod"); pod.innerHTML = ""; $("fnote").textContent = mishaps();
+  const pod = $("pod"); pod.innerHTML = ""; $("fnote").textContent = mishaps("\n");
   const last = raceNo >= EVENT_RACES;
   $("ftitle").textContent = last ? "🏁 FINAL RACE RESULT 🏁" : `🏁 RACE ${raceNo} OF ${EVENT_RACES} 🏁`;
   $("fmsg").textContent = last ? "That was the last race of the event! Update your sheets and pay your winnings." : "Update your sheets, pay your winnings and when you are ready start the next race.";
@@ -383,7 +394,7 @@ function draw(t){
   ctx.fillStyle = "#fff"; ctx.font = "bold 26px system-ui"; ctx.textAlign = "center"; ctx.fillText("FINISH",fx+5,TOP-66); ctx.textAlign = "left";
   for(const o of OBS){ const gx = sx(o.x); if(gx > -330 && gx < W+330) theme.obst(o,gx,t); }
   field.forEach(f => {
-    const px = sx(START_X + f.pos*TRACK_LEN + f.over), py = TOP + f.lane*LANE + LANE/2 - 12;
+    const px = sx(f.wx), py = TOP + f.lane*LANE + LANE/2 - 12;
     label(f,px,py);
     if(f.gone) return;
     if(f.jy > 1) E(px,py+48,46*(1-Math.min(.6,f.jy/110)),6,0,"rgba(0,0,0,.25)");
