@@ -161,7 +161,7 @@ function buildMenu(){
 
 /* ============ RACE ENGINE ============ */
 const cv = $("cv"); let ctx = cv.getContext("2d"), noLabel = false;
-const W = 1600, H = 800, TOP = 100, LANE = 104, TRACK_LEN = 7000, START_X = 200;   // logical size; canvas is rendered at screen resolution
+const W = 1600, H = 800, TOP = 100, LANE = 104, TRACK_LEN = 13000, START_X = 200;   // logical size; canvas is rendered at screen resolution
 let lastT = 0, snow = [], endT = 0, leadPx = 0;
 const GAP = 650;                              // max on-screen distance behind the leader
 function sx(w){ const lw = START_X+leadPx, d = lw-w; return lw - camX - (d > 0 ? GAP*(1-Math.exp(-d/GAP)) : d); }
@@ -193,10 +193,10 @@ function drawOrder(){
 function run(){
   $("start").style.display = "none"; setTitle();
   setup(); $("res").textContent = "";
-  const order = drawOrder(), base = 17;           // seconds for the winner
+  const order = drawOrder(), base = 42;           // seconds for the winner
   order.forEach((f,i) => {
-    f.T = base + i*0.7 + Math.random()*0.35; f.omax = 170 - i*28;   // winner coasts furthest, so the finish order stays visible      // set finish time so the drawn order is guaranteed
-    f.a = [0.05+Math.random()*0.06, 0.04+Math.random()*0.05];
+    f.T = base + i*0.9 + Math.random()*0.4; f.omax = 170 - i*28;   // winner coasts furthest, so the finish order stays visible      // set finish time so the drawn order is guaranteed
+    f.a = [0.018+Math.random()*0.01, 0.012+Math.random()*0.01];   // gentle wobble: speed never drops to zero
     f.p = [Math.random()*6.3, Math.random()*6.3]; f.last = 0;
   });
   endT = Math.max(...field.map(f => f.T)) + 1.5; lastT = 0;
@@ -206,7 +206,7 @@ function run(){
 
 function progress(f, t){                           // smooth wobble that always ends exactly at 1
   const u = Math.min(t/f.T, 1), env = u*(1-u);
-  const v = u + env*(f.a[0]*Math.sin(2*Math.PI*2*u+f.p[0]) + f.a[1]*Math.sin(2*Math.PI*3.3*u+f.p[1]))*4;
+  const v = u + env*(f.a[0]*Math.sin(2*Math.PI*1.3*u+f.p[0]) + f.a[1]*Math.sin(2*Math.PI*2.3*u+f.p[1]))*4;
   return Math.max(f.last, Math.min(v, 1));
 }
 
@@ -218,7 +218,7 @@ function tick(now){
     if(f.pos >= 1 && !f.done){ f.done = true; finished.push(f); }
     f.over = t > f.T ? f.omax*(1 - Math.exp(-(t - f.T)*1.8)) : 0;   // coast past the line
     f.mv = t < f.T + 1.3;
-    if(f.mv) f.ph += dt*15*(t < f.T ? 1 : Math.max(0, 1 - (t - f.T)/1.3));
+    if(f.mv) f.ph += dt*12*(t < f.T ? 1 : Math.max(0, 1 - (t - f.T)/1.3));
   });
   leadPx = Math.max(...field.map(f => f.pos*TRACK_LEN + f.over));
   const prev = camX;
