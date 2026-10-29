@@ -179,6 +179,7 @@ function buildMenu(){
 const cv = $("cv"); let ctx = cv.getContext("2d"), noLabel = false;
 const W = 1600, H = 800, TOP = 100, LANE = 104, TRACK_LEN = 13000, START_X = 200;   // logical size; canvas is rendered at screen resolution
 let lastT = 0, snow = [], endT = 0, leadPx = 0;
+const RACE_M = 1000, SIGNS = [800,600,400,200,100];   // trackside "metres to go" signs
 const GAP = 650;                              // max on-screen distance behind the leader
 function sx(w){ const lw = START_X+leadPx, d = lw-w; return lw - camX - (d > 0 ? GAP*(1-Math.exp(-d/GAP)) : d); }
 let theme, field = [], racing = false, t0 = 0, camX = 0, finished = [];
@@ -254,7 +255,7 @@ function tick(now){
 function portrait(f){                       // reuse deer() to paint a close-up
   const c = document.createElement("canvas"); c.width = 420; c.height = 430;
   const real = ctx; ctx = c.getContext("2d"); noLabel = true;
-  const pg = f.k === "pig", sc = pg ? 2.7 : 2.3; ctx.scale(sc,sc); (theme.runner || deer)({...f,mv:false,ph:0}, pg ? 65 : f.k ? 91 : 76, pg ? 74 : f.k ? 101 : 112, 0);
+  const pg = f.k === "pig", sc = pg ? 2.4 : 2.3; ctx.scale(sc,sc); (theme.runner || deer)({...f,mv:false,ph:0}, pg ? 69 : f.k ? 91 : 76, pg ? 88 : f.k ? 101 : 112, 0);
   ctx = real; noLabel = false; return c;
 }
 function showFinish(){
@@ -326,7 +327,8 @@ function draw(t){
   ctx.setTransform(k,0,0,k,0,0);
   theme.scene(t,bot);
   for(let m=Math.floor(camX/400)*400;m<camX+W+400;m+=400){ theme.post(m-camX,TOP-12); theme.post(m-camX,bot+22); }
-  ctx.fillStyle = "rgba(120,165,210,.5)"; ctx.fillRect(sx(START_X-70),TOP-10,5,LANE*6+20);   // start line
+  for(const d of SIGNS){ const gx = START_X + TRACK_LEN*(1-d/RACE_M) + 60 - camX; if(gx > -70 && gx < W+70){ sign(gx,TOP+30,d,.9); sign(gx,bot+62,d,.7); } }
+  ctx.fillStyle = "rgba(120,165,210,.5)"; ctx.fillRect(START_X-70-camX,TOP-10,5,LANE*6+20);   // start line
   const fx = sx(START_X+TRACK_LEN+60);                                                       // finish line
   for(let i=0;i<LANE*6/18;i++) for(let j=0;j<2;j++){ ctx.fillStyle = (i+j)%2 ? "#fff" : "#222"; ctx.fillRect(fx+j*18,TOP+i*18,18,18); }
   ctx.fillStyle = "#5a3a22"; ctx.fillRect(fx-6,TOP-84,8,74);
@@ -470,10 +472,10 @@ const MON = {
   wolf:{skin:"#8a6a45",top:"#7a5a3a",legs:"#6e5032",shoe:"#4a3520",hand:"#8a6a45"},
   skel:{skin:"#f4f0e4",top:"#2b2638",legs:"#f4f0e4",shoe:"#f4f0e4",hand:"#f4f0e4"}
 };
-function limb(x0,y0,l1,l2,a1,a2,w1,w2,c){
+function limb(x0,y0,l1,l2,a1,a2,w1,w2,c,o){
   const kx = x0+Math.sin(a1)*l1, ky = y0+Math.cos(a1)*l1, ex = kx+Math.sin(a2)*l2, ey = ky+Math.cos(a2)*l2;
   ctx.lineCap = "round"; ctx.lineJoin = "round";
-  for(const [col,d] of [[sh(c,.38),3],[c,0]]){
+  for(const [col,d] of [[o || sh(c,.38),3],[c,0]]){
     ctx.strokeStyle = col;
     ctx.lineWidth = w1+d; ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(kx,ky); ctx.stroke();
     ctx.lineWidth = w2+d; ctx.beginPath(); ctx.moveTo(kx,ky); ctx.lineTo(ex,ey); ctx.stroke();
@@ -624,42 +626,69 @@ function postFarm(x,y){
   ctx.fillStyle = "#8b5a2b"; ctx.fillRect(x-3,y-38,6,38);
   ctx.fillStyle = "#d32f2f"; ctx.beginPath(); ctx.moveTo(x+3,y-38); ctx.lineTo(x+24,y-31+Math.sin(lastT*6+x)*2.5); ctx.lineTo(x+3,y-24); ctx.fill();
 }
-function pig(f,x,y,t){
-  const mv = f.mv, ph = f.ph || 0, c = f.c, dk = sh(c,.68), ol = sh(c,.35), flap = mv ? Math.sin(ph*2)*.35 : Math.sin(t*2+f.seed)*.05;
-  ctx.save(); ctx.translate(x,y+10); ctx.scale(1.15,1.15);
-  E(0,36,48,6,0,"rgba(30,15,5,.32)");
-  ctx.translate(0, mv ? -Math.abs(Math.sin(ph))*6 : Math.sin(t*2+f.seed)*.8); ctx.rotate(mv ? Math.sin(ph)*.05 : 0);
-  const leg = (hx,p,col) => { const a1 = mv ? Math.sin(p) : 0, [ex,ey] = limb(hx,14,11,10,a1,mv ? a1-.9*(1+Math.sin(p+1.1)) : 0,10,8,col); B(ex+1,ey+1,5,3.2,0,"#3a2428"); };
-  leg(16,ph+.5,dk); leg(-18,ph+3.3,dk);
-  const parts = [[0,0,34,21],[-24,3,18,19],[24,3,18,20]];
-  ctx.strokeStyle = ol; ctx.lineWidth = 4; parts.forEach(([a,b,rx,ry]) => { ctx.beginPath(); ctx.ellipse(a,b,rx,ry,0,0,7); ctx.stroke(); });
-  let g = ctx.createLinearGradient(0,-22,0,24); g.addColorStop(0,lt(c,.2)); g.addColorStop(.55,c); g.addColorStop(1,sh(c,.72));
+function sign(x,y,d,s){                      // round "metres to go" board on a post, like a racecourse marker
+  const col = theme.acc || "#d8232a";
+  ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
+  E(3,0,15,4,0,"rgba(0,0,0,.22)");
+  ctx.fillStyle = "#5b3a1e"; ctx.fillRect(-4,-100,8,100); ctx.fillStyle = "rgba(255,255,255,.2)"; ctx.fillRect(-4,-100,2.5,100);
+  ctx.fillStyle = col; ctx.strokeStyle = "rgba(0,0,0,.4)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0,-92,33,0,7); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0,-92,27,0,7); ctx.stroke();
+  for(const [ty,tw,txt] of [[-131,60,"METRES"],[-67,48,"TO GO"]]){
+    ctx.fillStyle = col; ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(-tw/2,ty,tw,17,6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.font = "bold 11px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt,0,ty+9);
+  }
+  ctx.font = "bold 28px system-ui"; ctx.fillText(d,0,-91); ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+  ctx.restore();
+}
+function pig(f,x,y,t){                       // chubby cartoon pig: big head, outlined in a deep tone, open smile, curly tail
+  const mv = f.mv, ph = f.ph || 0, c = f.c, [r0,g0,b0] = px(c), dark = r0*.3+g0*.59+b0*.11 < 90;
+  const ol = dark ? sh(c,.4) : `rgb(${px(c).map((v,i) => Math.round(v*.2+[90,26,46][i]*.8))})`, dk = sh(c,.8);
+  const flap = mv ? Math.sin(ph*2)*.35 : Math.sin(t*2+f.seed)*.06;
+  ctx.save(); ctx.translate(x,y+8); ctx.scale(1.25,1.25);
+  E(0,41,52,6,0,"rgba(30,15,5,.3)");
+  ctx.translate(0, mv ? -Math.abs(Math.sin(ph))*7 : Math.sin(t*2+f.seed)*.8);
+  if(mv){ const q = Math.sin(ph*2)*.03; ctx.scale(1+q,1-q); }
+  ctx.rotate(mv ? Math.sin(ph)*.05 : 0);
+  const leg = (hx,p,col) => { const a1 = mv ? Math.sin(p)*1.05 : 0, [ex,ey] = limb(hx,16,11,10,a1,mv ? a1-.9*(1+Math.sin(p+1.1)) : 0,12,10,col,ol); B(ex+1,ey+1,6,3.6,0,f.hoof || "#e58aa0"); };
+  leg(18,ph+.5,dk); leg(-20,ph+3.3,dk);
+  const parts = [[0,-1,38,25],[-26,3,16,21],[24,3,16,22]];
+  ctx.strokeStyle = ol; ctx.lineWidth = 4.2; parts.forEach(([a,b,rx,ry]) => { ctx.beginPath(); ctx.ellipse(a,b,rx,ry,0,0,7); ctx.stroke(); });
+  let g = ctx.createLinearGradient(0,-26,0,26); g.addColorStop(0,lt(c,.2)); g.addColorStop(.55,c); g.addColorStop(1,sh(c,.76));
   ctx.fillStyle = g; parts.forEach(([a,b,rx,ry]) => { ctx.beginPath(); ctx.ellipse(a,b,rx,ry,0,0,7); ctx.fill(); });
   ctx.save(); ctx.beginPath(); parts.forEach(([a,b,rx,ry]) => { ctx.moveTo(a+rx,b); ctx.ellipse(a,b,rx,ry,0,0,7); }); ctx.clip();   // markings stay inside the body
-  E(2,19,38,8,0,lt(c,.25));
   const m = f.m, m1 = f.m1;
   if(m === "spots") [[-22,-8,6],[-8,-14,5],[8,-4,7],[22,-12,5.5],[-14,8,5],[30,6,4.5],[0,12,4]].forEach(([a,b,r]) => E(a,b,r,r*.85,0,m1));
   if(m === "brown"){ E(-26,-4,18,16,0,m1); E(10,-10,10,8,.3,m1); }
-  if(m === "saddle"){ ctx.fillStyle = m1; ctx.fillRect(12,-30,14,60); }
-  if(m === "ginger"){ [[-20,-8],[-6,-12],[10,-6],[24,-10],[-12,6],[18,8],[2,2]].forEach(([a,b]) => E(a,b,2.2,2.2,0,sh(c,.78))); ctx.strokeStyle = sh(c,.8); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-40,-14); ctx.quadraticCurveTo(0,-26,40,-14); ctx.stroke(); }
+  if(m === "saddle"){ ctx.fillStyle = m1; ctx.fillRect(12,-32,14,64); }
+  if(m === "ginger"){ [[-20,-8],[-6,-12],[10,-6],[24,-10],[-12,6],[18,8],[2,2]].forEach(([a,b]) => E(a,b,2.2,2.2,0,sh(c,.78))); }
   if(m === "patch"){ E(-26,-6,17,15,0,m1); E(16,-12,10,7,.4,m1); }
   ctx.restore();
-  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(-4,2,11.5,0,7); ctx.fill(); ctx.strokeStyle = f.ring; ctx.lineWidth = 2.8; ctx.stroke();   // circled number
-  ctx.fillStyle = "#222"; ctx.font = "bold 15px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(f.lane+1,-4,2.5); ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
-  const wag = Math.sin(ph*3)*(mv ? 2 : .4);                                                                                          // curly tail
-  for(const [cc,w] of [[ol,4.6],[lt(c,.15),2.6]]){ ctx.strokeStyle = cc; ctx.lineWidth = w; ctx.lineCap = "round"; ctx.beginPath(); ctx.arc(-44,-6+wag,5,Math.PI*.6,Math.PI*2.3); ctx.stroke(); }
+  ctx.strokeStyle = sh(c,.84); ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(8,17); ctx.quadraticCurveTo(16,22,26,17); ctx.moveTo(-18,19); ctx.quadraticCurveTo(-9,24,2,20); ctx.stroke();   // belly folds
+  E(-14,-18,15,5,-.1,"rgba(255,255,255,.33)");
+  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(-4,2,12,0,7); ctx.fill(); ctx.strokeStyle = f.ring; ctx.lineWidth = 3; ctx.stroke();   // circled number
+  ctx.fillStyle = "#222"; ctx.font = "bold 16px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(f.lane+1,-4,2.5); ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+  ctx.save(); ctx.translate(-42,-8); ctx.rotate(Math.sin(ph*3)*(mv ? .35 : .06));                                                   // curly spiral tail
+  for(const [cc,w] of [[ol,5.4],[lt(c,.1),3]]){ ctx.strokeStyle = cc; ctx.lineWidth = w; ctx.lineCap = "round"; ctx.beginPath(); for(let a=0;a<=11;a+=.4){ const r = 1+a*.62; ctx[a ? "lineTo" : "moveTo"](-Math.cos(a)*r-2,-Math.sin(a)*r); } ctx.stroke(); }
+  ctx.restore();
   leg(26,ph,c); leg(-26,ph+2.7,c);
   ctx.translate(0, mv ? Math.sin(ph*2+1)*1.8 : Math.sin(t*1.5+f.seed));
-  const ec = f.m === "brown" || f.m === "patch" ? m1 : c;
-  ctx.save(); ctx.translate(38,-17); ctx.rotate(-.5+flap); B(0,-6,6,11,0,dk); ctx.restore();       // far ear
-  B(46,-6,17,16,0,c);                                                                                // head
-  if(f.m === "spots") E(40,-11,4.5,4,0,m1); if(f.m === "patch") E(41,-10,8,7,0,m1);
-  E(46,3,5.5,3.8,0,"rgba(255,110,140,.35)");
-  B(64,-1,7.5,9.5,0,f.sn || "#f08ca2"); E(66,-4.5,1.7,2.7,0,"#6b2a3a"); E(66,2.5,1.7,2.7,0,"#6b2a3a");   // snout
-  E(52,-12,4.8,5.2,0,"#fff"); ctx.strokeStyle = ol; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(52,-12,4.8,5.2,0,0,7); ctx.stroke();
-  E(53.6,-11.5,2.6,3,0,"#111"); E(54.4,-12.8,.9,.9,0,"#fff");
-  ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(47,-19); ctx.lineTo(56,-17.5); ctx.moveTo(53,9); ctx.quadraticCurveTo(58,13,63,9); ctx.stroke();
-  ctx.save(); ctx.translate(42,-19); ctx.rotate(.55+flap*.6); B(3,-3,7.5,11.5,.25,ec); E(3,-2,3.6,6.5,.25,"#e98a9d"); ctx.restore();   // floppy near ear
+  const ec = m === "brown" || m === "patch" ? m1 : c;
+  ctx.save(); ctx.translate(34,-22); ctx.rotate(-.45+flap); ctx.beginPath(); ctx.moveTo(-6,0); ctx.quadraticCurveTo(-4,-18,12,-16); ctx.quadraticCurveTo(8,-6,4,2); ctx.closePath();
+  ctx.fillStyle = dk; ctx.fill(); ctx.strokeStyle = ol; ctx.lineWidth = 2.6; ctx.stroke(); ctx.restore();                                  // far ear
+  ctx.strokeStyle = ol; ctx.lineWidth = 4.2; ctx.beginPath(); ctx.ellipse(44,-6,22,20,0,0,7); ctx.stroke();                                  // big round head
+  g = ctx.createLinearGradient(0,-26,0,14); g.addColorStop(0,lt(c,.22)); g.addColorStop(1,sh(c,.82)); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(44,-6,22,20,0,0,7); ctx.fill();
+  if(m === "spots"){ E(38,-14,5,4.5,0,m1); E(52,-20,3.2,3,0,m1); } if(m === "patch") E(40,-12,10,9,0,m1);
+  E(47,5,6.5,4.2,0,"rgba(255,105,140,.4)");
+  ctx.beginPath(); ctx.moveTo(50,12); ctx.quadraticCurveTo(58,27,69,14); ctx.quadraticCurveTo(60,15,50,12); ctx.fillStyle = "#9e2038"; ctx.fill(); ctx.strokeStyle = ol; ctx.lineWidth = 2; ctx.stroke();   // open smile
+  E(59,19,4.4,2.6,0,"#ff7d98");
+  const snT = f.sn || "#f07f98"; ctx.strokeStyle = ol; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.ellipse(67,2,10,9.5,0,0,7); ctx.stroke();    // big flat snout
+  g = ctx.createLinearGradient(0,-8,0,12); g.addColorStop(0,lt(snT,.2)); g.addColorStop(1,sh(snT,.85)); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(67,2,10,9.5,0,0,7); ctx.fill();
+  E(69,-1.5,1.9,3,0,ol); E(69,6,1.9,3,0,ol);
+  if(dark) E(52,-10,5.8,7,0,"#fff");
+  E(52,-10,dark ? 3.6 : 5.2,dark ? 4.6 : 6.6,0,"#2a1218"); E(53.8,-12.6,2,2,0,"#fff"); E(51,-7.5,1,1,0,"#fff");                              // big glossy eye
+  ctx.save(); ctx.translate(38,-22); ctx.rotate(.5+flap*.6); ctx.beginPath(); ctx.moveTo(-8,2); ctx.quadraticCurveTo(-8,-20,14,-18); ctx.quadraticCurveTo(10,-6,6,4); ctx.closePath();
+  ctx.fillStyle = ec; ctx.fill(); ctx.strokeStyle = ol; ctx.lineWidth = 3; ctx.stroke();
+  ctx.strokeStyle = sh(ec,.82); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-2,-2); ctx.quadraticCurveTo(2,-12,10,-14); ctx.stroke(); ctx.restore();       // floppy folded ear
   ctx.restore();
 }
 function star(x,y,r,c){ ctx.fillStyle = c; ctx.beginPath(); for(let i=0;i<10;i++){ const a = -Math.PI/2+i*Math.PI/5, rr = i%2 ? r*.45 : r; ctx[i ? "lineTo" : "moveTo"](x+Math.cos(a)*rr,y+Math.sin(a)*rr); } ctx.fill(); }
