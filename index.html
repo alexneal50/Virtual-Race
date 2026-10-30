@@ -83,6 +83,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
   <div id="bar">
     <button id="back">← Menu</button>
     <button id="start">Start race</button>
+    <button id="skip" style="display:none">⏭ Skip intro</button>
+    <button id="snd">🔊 Commentary on</button>
     <span id="title"></span>
   </div>
   <canvas id="cv"></canvas>
@@ -104,7 +106,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 // Each theme is a set of runners. Add Halloween etc. by adding an entry here.
 const THEMES = {
   christmas: {
-    label: "🎄 Christmas Reindeer Race", scene: sceneSnow, post: pole, obst: obstSnow, jumpName: "snow bank", waterName: "ice river", puff: ["#fff","rgba(150,190,230,.8)"],
+    label: "🎄 Christmas Reindeer Race", scene: sceneSnow, post: pole, obst: obstSnow, jumpName: "snow bank", waterName: "ice river", say: "the Christmas reindeer derby", puff: ["#fff","rgba(150,190,230,.8)"],
     runners: [
       {n:"Blizzard",c:"#8a5a35",c2:"#f3efe8",s1:"#f58a1f",s2:"#ffd21f",ant:0,sz:1,bell:"#5ec8d0",stripe:true}, {n:"Starlight",c:"#8b4a22",c2:"#8b4a22",s1:"#d8232a",s2:"#ffffff",ant:1,sz:1.03,bell:"#ffd24d",star:true},
       {n:"Snowflake",c:"#6a5648",c2:"#f1f4f6",s1:"#2a6fd6",s2:"#ffffff",ant:2,sz:.94,bell:"#9fd8ff",sock:true,flake:true}, {n:"Twinkle",c:"#f4f6f6",c2:"#f4f6f6",s1:"#8a3fd6",s2:"#ff8ad0",ant:3,sz:.97,bell:"#ff8ad0",sparkle:true},
@@ -112,12 +114,12 @@ const THEMES = {
     ]
   },
   halloween: {
-    label: "🎃 Halloween Monster Race", hw: true, scene: sceneGrave, post: postPumpkin, obst: obstGrave, jumpName: "gravestone", waterName: "swamp", runner: monster, acc: "#e8680c",
+    label: "🎃 Halloween Monster Race", hw: true, scene: sceneGrave, post: postPumpkin, obst: obstGrave, jumpName: "gravestone", waterName: "swamp", say: "the Halloween monster mash", runner: monster, acc: "#e8680c",
     puff: ["#7a6590","rgba(15,8,25,.55)"], hues: [22,38,280,110],
     runners: [{n:"Dracula",k:"dracula"},{n:"Frankenstein",k:"frank"},{n:"Mummy",k:"mummy"},{n:"Werewolf",k:"wolf"},{n:"Ghost",k:"ghost"},{n:"Skeleton",k:"skel"}]
   },
   pigs: {
-    label: "🐷 Pig Race - Muddy Farmyard", cls: "farm", scene: sceneFarm, post: postFarm, obst: obstFarm, jumpName: "fence", waterName: "muddy puddle", runner: pig, acc: "#8b5a2b",
+    label: "🐷 Pig Race - Muddy Farmyard", cls: "farm", scene: sceneFarm, post: postFarm, obst: obstFarm, jumpName: "fence", waterName: "muddy puddle", say: "the muddy farmyard pig race", runner: pig, acc: "#8b5a2b",
     puff: ["#6a4528","rgba(35,20,8,.6)"], hues: [335,25,50,110],
     runners: [
       {n:"Wilbur",k:"pig",m:"plain",c:"#f6a6b8",ring:"#2a6fd6"},
@@ -183,7 +185,7 @@ function buildMenu(){
 
 /* ============ RACE ENGINE ============ */
 const cv = $("cv"); let ctx = cv.getContext("2d"), noLabel = false;
-const W = 1600, H = 800, TOP = 100, LANE = 104, TRACK_LEN = 13000, START_X = 200;   // logical size; canvas is rendered at screen resolution
+const W = 1600, H = 800, TOP = 100, LANE = 104, TRACK_LEN = 13000, START_X = 360;   // logical size; canvas is rendered at screen resolution
 let lastT = 0, snow = [], endT = 0, leadPx = 0, gapScale = 1, OBS = [], refuser = null, sinker = null;
 // Chance (0 to 1) that each mishap happens in a race. They are rolled separately, so a race can have both, one, or neither.
 const CHANCE = { refuse: 0.35, sink: 0.35 };
@@ -194,8 +196,8 @@ const SQ0 = 450, SQK = .3, squeeze = d => d <= SQ0 ? d : SQ0 + (d-SQ0)*SQK;   //
 let theme, field = [], racing = false, t0 = 0, camX = 0, finished = [];
 
 function openRace(key){ theme = THEMES[key]; raceNo = 1; $("start").style.display = ""; $("start").textContent = "Start race 1 of " + EVENT_RACES; setTitle(); $("res").textContent = ""; setup(); show("race"); fit(); draw(0); }
-$("back").onclick = () => { racing = false; show("menu"); };
-$("start").onclick = () => { if(!racing) run(); };
+$("back").onclick = () => { racing = false; introActive = false; skipFlag = true; stopSpeech(); $("skip").style.display = "none"; show("menu"); };
+$("start").onclick = () => { if(!racing && !introActive) begin(); };
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
@@ -216,9 +218,9 @@ function drawOrder(){
   return order;
 }
 
-function run(){
+function run(keep){
   $("start").style.display = "none"; setTitle();
-  setup(); $("res").textContent = "";
+  if(!keep) setup(); $("res").textContent = "";
   OBS = [[.14,"jump"],[.27,"water"],[.40,"jump"],[.52,"water"],[.64,"jump"],[.76,"water"],[.88,"jump"]]
     .map(([fr,k]) => ({k, x:START_X+TRACK_LEN*fr, hw:k === "water" ? 150 : 95, H:k === "water" ? 58 : 46}));
   const jumps = OBS.filter(o => o.k === "jump"), waters = OBS.filter(o => o.k === "water"), pool = [...field], pick = a => a[Math.random()*a.length|0];
@@ -226,14 +228,14 @@ function run(){
   if(Math.random() < CHANCE.refuse){ refuser = pool.splice(Math.random()*pool.length|0,1)[0]; const o = pick(jumps); refuser.victim = 1; refuser.stopP = (o.x-o.hw-20-START_X)/TRACK_LEN; }
   if(Math.random() < CHANCE.sink){ sinker = pool.splice(Math.random()*pool.length|0,1)[0]; const o = pick(waters); sinker.victim = 2; sinker.fallP = (o.x-o.hw-START_X)/TRACK_LEN; }
   const base = 42, order = drawOrder().filter(f => !f.victim);       // the two unlucky runners never finish
-  order.forEach((f,i) => { f.T = base + i*0.9 + Math.random()*0.4; f.omax = 170 - i*28; });
+  order.forEach((f,i) => { f.T = base + i*0.9 + Math.random()*0.4; f.omax = 130 - i*22; });
   field.forEach(f => {
     if(f.victim){ f.T = base + 3 + Math.random()*3; f.omax = 0; }
     f.a = [0.012+Math.random()*0.008, 0.008+Math.random()*0.008];   // gentle wobble: speed never drops to zero
     f.p = [Math.random()*6.3, Math.random()*6.3]; f.last = 0;
   });
   endT = Math.max(...order.map(f => f.T)) + 1.5; lastT = 0; gapScale = 1;
-  racing = true; t0 = performance.now(); $("start").disabled = true;
+  cmReset(); racing = true; t0 = performance.now(); $("start").disabled = true;
   requestAnimationFrame(tick);
 }
 
@@ -292,7 +294,7 @@ function tick(now){
   });
   leadPx = Math.max(...field.map(f => f.ew));
   const prev = camX;
-  camX = Math.max(0, Math.min(leadPx - W*0.64, TRACK_LEN + START_X + 260 - W));
+  camX = Math.max(0, Math.min(leadPx - W*0.64, TRACK_LEN + START_X + 320 - W));
   snow.forEach(p => { p.x += p.vx*dt - (camX - prev); p.y += p.vy*dt; p.vy += (p.g === undefined ? 140 : p.g)*dt; p.l -= dt; });
   field.forEach(f => {
     const py = TOP+f.lane*LANE+LANE/2-12;
@@ -302,6 +304,7 @@ function tick(now){
       snow.push({x:sx(f.wx)+(Math.random()-.5)*40, y:py+44, vx:(Math.random()-.5)*20, vy:-40, g:-20, l:.9, r:2+Math.random()*2.5, c:"rgba(215,243,255,.8)", s:"rgba(90,150,200,.9)"});
   });
   snow = snow.filter(p => p.l > 0);
+  commentary(t);
   draw(t);
   if(t < endT) return requestAnimationFrame(tick);
   racing = false; $("start").disabled = false;
@@ -317,7 +320,7 @@ function portrait(f){                       // reuse deer() to paint a close-up
   ctx = real; noLabel = false; return c;
 }
 function showFinish(){
-  const pod = $("pod"); pod.innerHTML = ""; $("fnote").textContent = mishaps("\n");
+  const pod = $("pod"); pod.innerHTML = ""; $("fnote").textContent = mishaps("\n"); announceResult();
   const last = raceNo >= EVENT_RACES;
   $("ftitle").textContent = last ? "🏁 FINAL RACE RESULT 🏁" : `🏁 RACE ${raceNo} OF ${EVENT_RACES} 🏁`;
   $("fmsg").textContent = last ? "That was the last race of the event! Update your sheets and pay your winnings." : "Update your sheets, pay your winnings and when you are ready start the next race.";
@@ -334,7 +337,7 @@ function showFinish(){
   $("fin").classList.toggle("hw", !!theme.hw); $("fin").classList.toggle("farm", theme.cls === "farm"); $("fin").classList.add("on"); startConf();
 }
 function closeFin(){ $("fin").classList.remove("on"); cancelAnimationFrame(confRaf); }
-$("next").onclick = () => { closeFin(); if(raceNo >= EVENT_RACES){ show("menu"); return; } raceNo++; run(); };
+$("next").onclick = () => { closeFin(); stopSpeech(); if(raceNo >= EVENT_RACES){ show("menu"); return; } raceNo++; begin(); };
 function setTitle(){ $("title").textContent = `${theme.label} · Race ${raceNo} of ${EVENT_RACES}`; }
 const fc = $("conf"), fg = fc.getContext("2d"); let bits = [], confRaf = 0;
 function burst(n){
@@ -412,7 +415,7 @@ function draw(t){
 function label(f,x,y){
   ctx.save(); ctx.translate(x,y); ctx.font = "bold 22px system-ui";
   const lab = `${f.n}  ${f.odds}/1`, lw = ctx.measureText(lab).width + 24;
-  ctx.fillStyle = "#fff"; ctx.strokeStyle = theme.acc || "#0a8fc4"; ctx.lineWidth = 3;
+  ctx.fillStyle = f.hi ? "#ffe680" : "#fff"; ctx.strokeStyle = theme.acc || "#0a8fc4"; ctx.lineWidth = f.hi ? 5 : 3;
   ctx.beginPath(); ctx.roundRect(-lw-80,-40,lw,34,10); ctx.fill(); ctx.stroke();
   ctx.fillStyle = "#06435c"; ctx.fillText(lab,-lw-68,-16); ctx.restore();
 }
@@ -807,6 +810,97 @@ function obstGrave(o,gx,t){
     ctx.strokeStyle = "#1b2a14"; ctx.lineWidth = 3;
     for(const sd of [-1,1]) for(let y = TOP; y < TOP+LANE*6; y += 40){ ctx.beginPath(); ctx.moveTo(gx+sd*(hw-4),y+12); ctx.lineTo(gx+sd*(hw-4)+sd*3,y-8); ctx.stroke(); }
   }
+}
+/* ---------- Audio commentary (the browser's built-in text-to-speech) ---------- */
+const TTS = "speechSynthesis" in window, NUMW = ["zero","one","two","three","four","five","six","seven","eight","nine","ten"];
+let commentaryOn = TTS, introActive = false, skipFlag = false, voice = null, cm = {}, idleRaf = 0;
+try{ if(localStorage.getItem("vr_comm") === "off") commentaryOn = false; }catch(e){}
+const oddsSay = o => o === 1 ? "evens" : `${NUMW[o]} to one`, PH = a => a[Math.random()*a.length|0];
+function pickVoice(){
+  if(!TTS) return; const vs = speechSynthesis.getVoices(); if(!vs.length) return;
+  const en = vs.filter(v => /^en[-_]GB/i.test(v.lang)), pool = en.length ? en : vs.filter(v => /^en/i.test(v.lang));
+  voice = pool.find(v => /daniel|george|oliver|arthur|google uk english male|male/i.test(v.name)) || pool[0] || null;
+}
+if(TTS){ pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function stopSpeech(){ if(TTS) speechSynthesis.cancel(); }
+function say(text, o = {}){
+  return new Promise(res => {
+    if(!commentaryOn || !TTS){ res(); return; }
+    if(o.urgent) speechSynthesis.cancel(); else if(o.skipIfBusy && speechSynthesis.speaking){ res(); return; }
+    const u = new SpeechSynthesisUtterance(text); u.lang = voice ? voice.lang : "en-GB"; if(voice) u.voice = voice;
+    u.rate = o.rate || 1.08; u.pitch = o.pitch || 1;
+    let done = false; const fin = () => { if(!done){ done = true; res(); } };
+    u.onend = fin; u.onerror = fin; setTimeout(fin, 2500 + text.length*110);          // safety net if 'end' never fires
+    setTimeout(() => { try{ speechSynthesis.speak(u); }catch(e){ fin(); } }, o.urgent ? 60 : 0);
+  });
+}
+function begin(){                                  // start a race: meet the runners first when commentary is on
+  stopSpeech();
+  if(!commentaryOn){ run(); return; }
+  setup(); draw(0); intro();
+}
+async function intro(){
+  introActive = true; skipFlag = false; $("skip").style.display = ""; $("start").style.display = "none"; $("res").textContent = "🎙️ Meet the runners…";
+  const loop = now => { if(!introActive) return; field.forEach(f => { f.jy = f.hi ? 9*Math.abs(Math.sin(now/1000*6)) : 0; f.air = f.jy !== 0; }); draw(now/1000); idleRaf = requestAnimationFrame(loop); };
+  idleRaf = requestAnimationFrame(loop);
+  await say(`Welcome to race ${raceNo} of ${EVENT_RACES}, ${theme.say}. And here are your runners.`);
+  for(const f of field){ if(!introActive || skipFlag) break; f.hi = true; await say(`Number ${f.lane+1}, ${f.n}, ${oddsSay(f.odds)}.`); f.hi = false; }
+  if(introActive && !skipFlag) await say("They're lining up at the start... and they're under starter's orders!");
+  field.forEach(f => { f.hi = false; f.jy = 0; f.air = false; });
+  if(!introActive) return;
+  introActive = false; cancelAnimationFrame(idleRaf); $("skip").style.display = "none"; run(true);
+}
+$("skip").onclick = () => { skipFlag = true; stopSpeech(); };
+function syncSnd(){ $("snd").textContent = commentaryOn ? "🔊 Commentary on" : "🔇 Commentary off"; }
+$("snd").onclick = () => {
+  commentaryOn = !commentaryOn; try{ localStorage.setItem("vr_comm", commentaryOn ? "on" : "off"); }catch(e){}
+  if(commentaryOn) say("Commentary on.", {urgent:true}); else stopSpeech();
+  syncSnd();
+};
+if(!TTS) $("snd").style.display = "none";
+syncSnd();
+function cmReset(){ cm = {lead:null, said:0, upd:0, n:0, obst:{}, sign:{}, refused:false, sank:false, won:false, started:false}; }
+function commentary(t){                            // called every frame during a race
+  if(!commentaryOn || !TTS) return;
+  if(!cm.started){ cm.started = true; say("And they're off!", {urgent:true, rate:1.2, pitch:1.1}); return; }
+  for(const f of field){                           // mishaps always interrupt
+    if(f.stopped && !cm.refused){ cm.refused = true; say(`Oh no! ${f.n} has refused at the ${theme.jumpName}! That's the end of ${f.n}'s race!`, {urgent:true, rate:1.15, pitch:1.1}); return; }
+    if(f.fe > .35 && !cm.sank){ cm.sank = true; say(`${f.n} has fallen in the ${theme.waterName}! And they've sunk without trace!`, {urgent:true, rate:1.15, pitch:1.1}); return; }
+  }
+  if(finished.length && !cm.won){ cm.won = true; say(`And ${finished[0].n} wins it!`, {urgent:true, rate:1.25, pitch:1.15}); }
+  if(cm.won) return;
+  const ro = field.filter(f => !f.gone && !f.stopped).sort((a,b) => b.rw - a.rw), A = ro[0], B = ro[1], C = ro[2];
+  if(!A || !B || !C) return;
+  for(const d of SIGNS){
+    if(!cm.sign[d] && A.wx > START_X + TRACK_LEN*(1-d/RACE_M) + 60){
+      cm.sign[d] = 1; cm.upd = t;
+      const lines = {800:`Eight hundred metres to go. ${A.n} leads from ${B.n}.`, 600:`Six hundred to go, and ${A.n} is in front.`, 400:`Four hundred to go. ${A.n} leads, ${B.n} second, ${C.n} third.`,
+        200:`Two hundred to go! ${A.n} leads from ${B.n}!`, 100:`A hundred to go! ${A.n} in front, and ${B.n} is challenging!`};
+      say(lines[d], d <= 200 ? {urgent:true, rate:1.2, pitch:1.1} : {rate:1.1}); return;
+    }
+  }
+  OBS.forEach((o,i) => {
+    if(!cm.obst[i] && A.wx > o.x - 650 && A.wx < o.x - 150){
+      cm.obst[i] = 1; const n = o.k === "water" ? theme.waterName : theme.jumpName;
+      say(PH([`Here comes the ${n}!`, `Now for the ${n}!`, `They're approaching the ${n}!`]), {skipIfBusy:true, rate:1.12});
+    }
+  });
+  if(cm.lead !== A){                               // new leader
+    if(cm.lead && t > 5 && t - cm.said > 5 && A.rw - B.rw > 30){ say(PH([`${A.n} takes the lead!`, `${A.n} goes to the front!`, `And it's ${A.n} in front now!`]), {skipIfBusy:true, rate:1.15}); cm.said = t; }
+    cm.lead = A;
+  }
+  if(t > 6 && t - cm.upd > 9){                     // regular running commentary
+    cm.upd = t; const last = ro[ro.length-1];
+    say([`${A.n} leads from ${B.n}, with ${C.n} third.`, `${A.n} in front, ${B.n} second, ${C.n} third.`, `${last.n} is struggling at the back of the field.`, `${A.n} is setting the pace, ${B.n} right behind.`][cm.n++ % 4], {skipIfBusy:true});
+  }
+}
+function announceResult(){
+  if(!commentaryOn || !TTS || finished.length < 3) return;
+  const [a,b,c] = finished;
+  let txt = `The result. First, number ${a.lane+1}, ${a.n}, at ${oddsSay(a.odds)}. Second, number ${b.lane+1}, ${b.n}. Third, number ${c.lane+1}, ${c.n}.`;
+  if(refuser) txt += ` ${refuser.n} refused at the ${theme.jumpName}.`;
+  if(sinker) txt += ` And ${sinker.n} fell in the ${theme.waterName} and sank.`;
+  say(txt, {rate:1.05});
 }
 function star(x,y,r,c){ ctx.fillStyle = c; ctx.beginPath(); for(let i=0;i<10;i++){ const a = -Math.PI/2+i*Math.PI/5, rr = i%2 ? r*.45 : r; ctx[i ? "lineTo" : "moveTo"](x+Math.cos(a)*rr,y+Math.sin(a)*rr); } ctx.fill(); }
 const ANT = [   // six different antler shapes
