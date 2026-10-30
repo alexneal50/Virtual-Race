@@ -843,18 +843,27 @@ $("vsel").onchange = () => {
   voice = voiceList.find(v => v.name === $("vsel").value) || voice; try{ localStorage.setItem("vr_voice", voice.name); }catch(e){}
   stopSpeech(); say("And they're off! Down the straight they come!", {urgent:true, rate:1.1});
 };
-function stopSpeech(){ if(TTS) speechSynthesis.cancel(); }
+let sq = [], cur = null;                           // our own queue: one line at a time, nothing is ever cut off mid-sentence
 function say(text, o = {}){
   return new Promise(res => {
     if(!commentaryOn || !TTS){ res(); return; }
-    if(o.urgent) speechSynthesis.cancel(); else if(o.skipIfBusy && speechSynthesis.speaking){ res(); return; }
-    const u = new SpeechSynthesisUtterance(text); u.lang = voice ? voice.lang : "en-GB"; if(voice) u.voice = voice;
-    u.rate = (o.rate || 1.04)*(.97+Math.random()*.06); u.pitch = (o.pitch || 1)*(.98+Math.random()*.04);   // tiny random variation so it never sounds mechanical
-    let done = false; const fin = () => { if(!done){ done = true; res(); } };
-    u.onend = fin; u.onerror = fin; setTimeout(fin, 2500 + text.length*110);          // safety net if 'end' never fires
-    setTimeout(() => { try{ speechSynthesis.speak(u); }catch(e){ fin(); } }, o.urgent ? 60 : 0);
+    if(o.skipIfBusy && (cur || sq.length)){ res(); return; }                       // routine chatter never piles up
+    if(o.urgent){ sq.forEach(x => x.res()); sq = []; }                              // big news replaces anything still waiting, but waits for the current line to finish
+    sq.push({text, o, res}); pump();
   });
 }
+function pump(){
+  if(cur || !sq.length) return;
+  const {text, o, res} = sq.shift();
+  const u = new SpeechSynthesisUtterance(text); u.lang = voice ? voice.lang : "en-GB"; if(voice) u.voice = voice;
+  u.rate = Math.min(1.35, (o.rate || 1.12)*(.97+Math.random()*.06)); u.pitch = (o.pitch || 1.04)*(.98+Math.random()*.04);   // small random variation so it never sounds mechanical
+  let done = false, tm = 0, tries = 0;
+  const me = { fin(quiet){ if(done) return; done = true; clearTimeout(tm); if(cur === me) cur = null; res(); if(!quiet) pump(); } };
+  cur = me; u.onend = () => me.fin(); u.onerror = () => me.fin();
+  const arm = () => { tm = setTimeout(() => { if(speechSynthesis.speaking && ++tries < 6) arm(); else me.fin(); }, 3500 + text.length*120); }; arm();   // safety net if 'end' never fires
+  try{ speechSynthesis.speak(u); }catch(e){ me.fin(); }
+}
+function stopSpeech(){ const c = cur; cur = null; sq.forEach(x => x.res()); sq = []; if(TTS) speechSynthesis.cancel(); if(c) c.fin(true); }
 function begin(){                                  // start a race: meet the runners first when commentary is on
   stopSpeech();
   if(!commentaryOn){ run(); return; }
@@ -864,10 +873,10 @@ async function intro(){
   introActive = true; skipFlag = false; $("skip").style.display = ""; $("start").style.display = "none"; $("res").textContent = "🎙️ Meet the runners…";
   const loop = now => { if(!introActive) return; field.forEach(f => { f.jy = f.hi ? 9*Math.abs(Math.sin(now/1000*6)) : 0; f.air = f.jy !== 0; }); draw(now/1000); idleRaf = requestAnimationFrame(loop); };
   idleRaf = requestAnimationFrame(loop);
-  await say(PH([`Good afternoon, and welcome to ${theme.say}! This is race ${raceNo} of ${EVENT_RACES}.`, `Hello, and welcome to ${theme.say}! Race ${raceNo} of ${EVENT_RACES} is coming up.`]) + " Here are your runners.", {rate:1.0});
-  for(const f of field){ if(!introActive || skipFlag) break; f.hi = true; await say(`Number ${f.lane+1}... ${f.n}... ${oddsSay(f.odds)}.`, {rate:.98}); f.hi = false; }
-  if(introActive && !skipFlag) await say(`${field[0].n} is the favourite at ${oddsSay(field[0].odds)}, while ${field[5].n} is the outsider at ${oddsSay(field[5].odds)}.`);
-  if(introActive && !skipFlag) await say("They're going down to the start now... and they're under starter's orders!", {rate:1.0});
+  await say((raceNo === 1 ? `Hello, and welcome to ${theme.say}! Race 1 of ${EVENT_RACES}. ` : PH([`And now, race ${raceNo} of ${EVENT_RACES}! `, `Here we go with race ${raceNo} of ${EVENT_RACES}! `])) + "Here are your runners!", {rate:1.12, pitch:1.08});
+  for(const f of field){ if(!introActive || skipFlag) break; f.hi = true; await say(`Number ${f.lane+1}... ${f.n}... ${oddsSay(f.odds)}!`, {rate:1.04, pitch:1.06}); f.hi = false; }
+  if(introActive && !skipFlag) await say(`${field[0].n} is the favourite at ${oddsSay(field[0].odds)}, and ${field[5].n} is the outsider at ${oddsSay(field[5].odds)}!`, {rate:1.1, pitch:1.06});
+  if(introActive && !skipFlag) await say("They're at the start now... and they're under starter's orders!", {rate:1.06, pitch:1.08});
   field.forEach(f => { f.hi = false; f.jy = 0; f.air = false; });
   if(!introActive) return;
   introActive = false; cancelAnimationFrame(idleRaf); $("skip").style.display = "none"; run(true);
@@ -885,51 +894,55 @@ function gapSay(px){ const L = px/LEN; return L < .3 ? "by a nose" : L < .75 ? "
 function cmReset(){ cm = {lead:null, said:0, upd:0, n:0, snapT:0, snap:null, gapPrev:undefined, lastTxt:"", obst:{}, sign:{}, refused:false, sank:false, won:false, started:false}; }
 function commentary(t){                            // called every frame during a race
   if(!commentaryOn || !TTS) return;
-  if(!cm.started){ cm.started = true; say("And they're off!", {urgent:true, rate:1.2, pitch:1.1}); return; }
-  for(const f of field){                           // mishaps always interrupt
-    if(f.stopped && !cm.refused){ cm.refused = true; say(`Oh no! ${f.n} has refused at the ${theme.jumpName}! That's the end of ${f.n}'s race!`, {urgent:true, rate:1.15, pitch:1.1}); return; }
-    if(f.fe > .35 && !cm.sank){ cm.sank = true; say(`${f.n} has fallen in the ${theme.waterName}! And they've sunk without trace!`, {urgent:true, rate:1.15, pitch:1.1}); return; }
+  if(!cm.started){ cm.started = true; say(PH(["And they're off!", "And they're away!", "They're off and racing!"]), {urgent:true, rate:1.3, pitch:1.14}); return; }
+  for(const f of field){                           // mishaps: top priority
+    if(f.stopped && !cm.refused){ cm.refused = true; say(`Oh no! ${f.n} has refused at the ${theme.jumpName}! That's ${f.n}'s race over!`, {urgent:true, rate:1.25, pitch:1.14}); return; }
+    if(f.fe > .35 && !cm.sank){ cm.sank = true; say(`Oh dear! ${f.n} has fallen in the ${theme.waterName}, and sunk without trace!`, {urgent:true, rate:1.25, pitch:1.14}); return; }
   }
   const ro = field.filter(f => !f.gone && !f.stopped).sort((a,b) => b.rw - a.rw), A = ro[0], B = ro[1], C = ro[2];
   if(finished.length && !cm.won){
     cm.won = true; const sec = ro.find(f => f !== finished[0]);
-    say(`And ${finished[0].n} wins it${sec && finished[0].rw - sec.rw < LEN ? ", just ahead of " + sec.n : ""}!`, {urgent:true, rate:1.25, pitch:1.15});
+    say(`And ${finished[0].n} wins it${sec && finished[0].rw - sec.rw < LEN ? ", just ahead of " + sec.n : ""}! What a finish!`, {urgent:true, rate:1.3, pitch:1.16});
   }
   if(cm.won || !A || !B || !C) return;
-  const prog = A.rw/TRACK_LEN, rate = prog > .8 ? 1.16 : prog > .5 ? 1.09 : 1.03, pitch = prog > .8 ? 1.07 : 1;
+  const prog = A.rw/TRACK_LEN, tight = A.rw - B.rw < 2*LEN;                  // the closer and later the race, the more excited the voice
+  const rate = Math.min(1.3, (prog > .8 ? 1.26 : prog > .5 ? 1.18 : 1.12) + (tight ? .04 : 0)), pitch = (prog > .8 ? 1.12 : prog > .5 ? 1.08 : 1.05) + (tight ? .03 : 0);
   for(const d of SIGNS){
     if(!cm.sign[d] && A.wx > START_X + TRACK_LEN*(1-d/RACE_M) + 60){
       cm.sign[d] = 1; cm.upd = t;
-      const lines = {800:`Eight hundred metres to go. ${A.n} leads from ${B.n}.`, 600:`Six hundred to go, and ${A.n} is still in front.`, 400:`Four hundred to go. ${A.n} leads, ${B.n} second, ${C.n} third.`,
-        200:`Two hundred to go! ${A.n} leads from ${B.n}!`, 100:`A hundred to go! ${A.n} in front, and ${B.n} is challenging!`};
-      say(lines[d], d <= 200 ? {urgent:true, rate:1.2, pitch:1.1} : {rate}); return;
+      const lines = {800:`Eight hundred metres to go! ${A.n} leads from ${B.n}!`, 600:`Six hundred to go, and ${A.n} is still in front!`, 400:`Four hundred to go! ${A.n} leads, ${B.n} second, ${C.n} third!`,
+        200:`Two hundred to go! ${A.n} leads from ${B.n}! Here we go!`, 100:`A hundred to go! ${A.n} in front, and ${B.n} is coming at them!`};
+      say(lines[d], d <= 200 ? {urgent:true, rate:Math.min(1.3,rate+.04), pitch:pitch+.02} : {rate, pitch}); return;
     }
   }
   OBS.forEach((o,i) => {
     if(!cm.obst[i] && A.wx > o.x - 650 && A.wx < o.x - 150){
-      cm.obst[i] = 1; const n = o.k === "water" ? theme.waterName : theme.jumpName;
-      say(PH([`Here comes the ${n}!`, `Now for the ${n}!`, `They're approaching the ${n}!`]), {skipIfBusy:true, rate});
+      cm.obst[i] = 1; if(Math.random() < .35) return; const n = o.k === "water" ? theme.waterName : theme.jumpName;
+      say(PH([`Here comes the ${n}!`, `Now for the ${n}!`, `They're approaching the ${n}!`, `The ${n} is next!`]), {skipIfBusy:true, rate, pitch});
     }
   });
   if(cm.lead !== A){                               // new leader
-    if(cm.lead && t > 5 && t - cm.said > 5 && A.rw - B.rw > 30){ say(PH([`${A.n} takes the lead!`, `${A.n} goes to the front!`, `And it's ${A.n} in front now!`]), {skipIfBusy:true, rate:rate+.05}); cm.said = t; }
+    if(cm.lead && t > 5 && t - cm.said > 5 && A.rw - B.rw > 30){ say(PH([`${A.n} takes the lead!`, `${A.n} goes to the front!`, `And it's ${A.n} in front now!`, `${A.n} hits the front!`]), {skipIfBusy:true, rate:Math.min(1.3,rate+.04), pitch:pitch+.02}); cm.said = t; }
     cm.lead = A;
   }
   if(!cm.snap || t - cm.snapT > 7){ cm.snap = {}; ro.forEach((f,i) => cm.snap[f.n] = i+1); cm.snapT = t; }
-  if(t > 3 && t - cm.upd > (prog > .85 ? 3.2 : 4.2)){                   // regular running commentary
+  if(t > 3 && t - cm.upd > (prog > .85 ? 3 : 3.8)){                     // regular running commentary
     cm.upd = t; const last = ro[ro.length-1], D = ro[3], gap = A.rw - B.rw, hot = [], gen = [];
-    gen.push(gap/LEN > 3.5 ? `${A.n} is well clear of ${B.n}, with ${C.n} third.` : `${A.n} leads ${B.n} ${gapSay(gap)}, with ${C.n} third.`);
-    gen.push(`It's ${A.n} in front, then ${B.n}, ${C.n} third${D ? ", and " + D.n + " fourth" : ""}.`);
-    gen.push(`${A.n} is setting the pace, ${B.n} right behind.`);
-    if(D && last !== D) gen.push(`Then ${D.n}, and ${last.n} is bringing up the rear.`);
-    if(last !== C) gen.push(`${last.n} is struggling at the back of the field.`);
+    gen.push(gap/LEN > 3.5 ? `${A.n} is well clear of ${B.n}, with ${C.n} third!` : `${A.n} leads ${B.n} ${gapSay(gap)}, with ${C.n} third!`);
+    gen.push(`It's ${A.n}, then ${B.n}, then ${C.n}!`);
+    gen.push(`${A.n} is out in front, and looking good!`, `${A.n} is setting the pace, with ${B.n} right on the tail!`, `${B.n} sits second, and ${C.n} is third!`);
+    if(D && last !== D) gen.push(`Then ${D.n}, and ${last.n} is bringing up the rear!`);
+    if(last !== C && prog < .6) gen.push(`${last.n} is at the back, but there's a long way to go!`);
+    if(last !== C && prog >= .6) gen.push(`${last.n} is struggling at the back now!`);
+    if(prog > .85) gen.push(`Into the final stretch! ${A.n} leads!`, `Not long to go now! ${A.n} in front, ${B.n} second!`);
+    if(Math.random() < .12) gen.push(PH(["What a race this is!", "They're flying now!", "Oh, this is exciting!", "Come on, come on!"]));
     ro.forEach((f,i) => {
       const was = cm.snap[f.n] || i+1;
-      if(was - (i+1) >= 1) hot.push(PH([`${f.n} is making ground, up to ${ORD[i+1]} now!`, `${f.n} is coming through, and moves up to ${ORD[i+1]}!`]));
-      if((i+1) - was >= 1 && i > 0) hot.push(`${f.n} is dropping back, down to ${ORD[i+1]}.`);
-      if(i < ro.length-1 && f.rw - ro[i+1].rw < 90) hot.push(`${f.n} and ${ro[i+1].n} are neck and neck for ${ORD[i+1]}!`);
+      if(was - (i+1) >= 1) hot.push(PH([`${f.n} is making ground, up to ${ORD[i+1]}!`, `${f.n} is coming through, up to ${ORD[i+1]} now!`, `Look at ${f.n}, flying up to ${ORD[i+1]}!`]));
+      if((i+1) - was >= 1 && i > 0) hot.push(`${f.n} is dropping back, down to ${ORD[i+1]}!`);
+      if(i < ro.length-1 && f.rw - ro[i+1].rw < 90) hot.push(`${f.n} and ${ro[i+1].n}, neck and neck for ${ORD[i+1]}! Oh, this is close!`);
     });
-    if(cm.gapPrev !== undefined){ const dg = gap - cm.gapPrev; if(dg > 120) hot.push(`${A.n} is pulling clear!`); else if(dg < -120) hot.push(`${B.n} is closing on ${A.n}!`); }
+    if(cm.gapPrev !== undefined){ const dg = gap - cm.gapPrev; if(dg > 120) hot.push(`${A.n} is pulling clear!`); else if(dg < -120) hot.push(`${B.n} is closing on ${A.n}!`, `${B.n} is coming at ${A.n}!`); }
     cm.gapPrev = gap;
     const pool = hot.length && Math.random() < .65 ? hot : gen; let txt = PH(pool); if(txt === cm.lastTxt) txt = PH(gen);
     cm.lastTxt = txt; say(txt, {skipIfBusy:true, rate, pitch});
@@ -938,10 +951,10 @@ function commentary(t){                            // called every frame during 
 function announceResult(){
   if(!commentaryOn || !TTS || finished.length < 3) return;
   const [a,b,c] = finished;
-  let txt = `That's ${a.n} winning race ${raceNo}! The result... First, number ${a.lane+1}, ${a.n}, at ${oddsSay(a.odds)}. Second, number ${b.lane+1}, ${b.n}. Third, number ${c.lane+1}, ${c.n}.`;
+  let txt = `What a race! ${a.n} wins race ${raceNo}! The result... First, number ${a.lane+1}, ${a.n}, at ${oddsSay(a.odds)}. Second, number ${b.lane+1}, ${b.n}. Third, number ${c.lane+1}, ${c.n}.`;
   if(refuser) txt += ` ${refuser.n} refused at the ${theme.jumpName}.`;
   if(sinker) txt += ` And ${sinker.n} fell in the ${theme.waterName} and sank.`;
-  say(txt, {rate:1.02});
+  say(txt, {rate:1.1, pitch:1.06});
 }
 function star(x,y,r,c){ ctx.fillStyle = c; ctx.beginPath(); for(let i=0;i<10;i++){ const a = -Math.PI/2+i*Math.PI/5, rr = i%2 ? r*.45 : r; ctx[i ? "lineTo" : "moveTo"](x+Math.cos(a)*rr,y+Math.sin(a)*rr); } ctx.fill(); }
 const ANT = [   // six different antler shapes
