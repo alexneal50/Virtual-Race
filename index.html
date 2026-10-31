@@ -21,7 +21,17 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #vsel{font:inherit;padding:8px;border-radius:10px;border:2px solid var(--accent);background:var(--card);color:var(--ink);max-width:230px}
 #race{padding:0;justify-content:flex-start;gap:0}
 #bar{display:flex;gap:10px;align-items:center;padding:8px;width:100%;justify-content:center;background:var(--card)}
-#cv{display:block;width:100%;max-width:calc((100vh - 120px)*2);aspect-ratio:2/1;height:auto;margin:0 auto}
+#stage{width:100%;max-width:calc((100vh - 178px)*2);margin:0 auto}
+#cv{display:block;width:100%;aspect-ratio:2/1;height:auto}
+#pbar{position:relative;height:52px;margin:2px 0 4px;font-family:system-ui,sans-serif}
+#pbar .rail{position:absolute;left:16px;right:16px;top:23px;height:8px;border-radius:6px;background:linear-gradient(90deg,#8bd0ff,#fff 55%,#ffd24d);box-shadow:inset 0 1px 3px rgba(0,0,0,.35)}
+#pbar .tick{position:absolute;top:34px;transform:translateX(-50%);font-size:10px;font-weight:700;color:var(--ink);opacity:.75}
+#pbar .flag{position:absolute;top:0;transform:translateX(-50%);font-size:16px}
+#pbar .info{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;top:-2px;font-size:13px;font-weight:800;color:var(--ink)}
+#pbar .dot{position:absolute;width:22px;height:22px;margin-left:-11px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.55);font:800 11px/18px system-ui,sans-serif;text-align:center;transition:left .1s linear}
+#pbar .dot.lead{transform:scale(1.3);z-index:5;box-shadow:0 0 10px 3px #ffd24d}
+#pbar .dot.out{filter:grayscale(1);opacity:.65}
+#pbar .dot.sunk{opacity:.3}
 #res{min-height:2.4em;padding:8px;font-weight:700}
 #fin{position:fixed;inset:0;z-index:99;display:none;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;color:#fff}
 #fin.on{display:flex}
@@ -89,7 +99,10 @@ button:disabled{opacity:.45;cursor:not-allowed}
     <select id="vsel" title="Commentary voice" style="display:none"></select>
     <span id="title"></span>
   </div>
-  <canvas id="cv"></canvas>
+  <div id="stage">
+    <div id="pbar"></div>
+    <canvas id="cv"></canvas>
+  </div>
   <div id="res"></div>
 </section>
 
@@ -197,8 +210,8 @@ function sx(w){ return w - camX; }                       // one true mapping: tr
 const SQ0 = 450, SQK = .3, squeeze = d => d <= SQ0 ? d : SQ0 + (d-SQ0)*SQK;   // keeps a long way back runners on screen by really closing the gap
 let theme, field = [], racing = false, t0 = 0, camX = 0, finished = [];
 
-function openRace(key){ theme = THEMES[key]; raceNo = 1; $("start").style.display = ""; $("start").textContent = "Start race 1 of " + EVENT_RACES; setTitle(); $("res").textContent = ""; setup(); show("race"); fit(); draw(0); }
-$("back").onclick = () => { racing = false; introActive = false; skipFlag = true; stopSpeech(); $("skip").style.display = "none"; show("menu"); };
+function openRace(key){ theme = THEMES[key]; theme.id = key; racing = false; introActive = false; stopSpeech(); $("skip").style.display = "none"; $("start").disabled = false; raceNo = 1; $("start").style.display = ""; $("start").textContent = "Start race 1 of " + EVENT_RACES; setTitle(); $("res").textContent = ""; setup(); show("race"); fit(); draw(0); }
+$("back").onclick = () => { racing = false; $("start").disabled = false; cancelAnimationFrame(idleRaf); introActive = false; skipFlag = true; stopSpeech(); $("skip").style.display = "none"; show("menu"); };
 $("start").onclick = () => { if(!racing && !introActive) begin(); };
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
@@ -206,7 +219,7 @@ function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.random()*(i+1)|
 function setup(){
   // New race: shuffle who's favourite, then lane 0 = 1/1 ... lane 5 = 10/1
   field = shuffle([...theme.runners]).map((r,i) => ({...r, odds:ODDS[i], lane:i, pos:0, ph:Math.random()*6, over:0, mv:false, seed:Math.random()*6, wx:START_X}));
-  finished = []; camX = 0; snow = []; leadPx = 0;
+  finished = []; camX = 0; snow = []; leadPx = 0; buildBar();
 }
 
 // Draw finishing order using win-probability weights (1/(odds+1)), so 1/1 wins ~half the time, 10/1 ~1 in 11.
@@ -306,7 +319,7 @@ function tick(now){
       snow.push({x:sx(f.wx)+(Math.random()-.5)*40, y:py+44, vx:(Math.random()-.5)*20, vy:-40, g:-20, l:.9, r:2+Math.random()*2.5, c:"rgba(215,243,255,.8)", s:"rgba(90,150,200,.9)"});
   });
   snow = snow.filter(p => p.l > 0);
-  commentary(t);
+  commentary(t); updBar();
   draw(t);
   if(t < endT) return requestAnimationFrame(tick);
   racing = false; $("start").disabled = false;
@@ -890,14 +903,73 @@ $("snd").onclick = () => {
 };
 if(!TTS) $("snd").style.display = "none";
 syncSnd();
+function dotColor(f){ return f.s1 || f.ring || ({dracula:"#a3122b",frank:"#86b86b",mummy:"#e5d9a8",wolf:"#8a6a45",ghost:"#dff1ff",skel:"#f4f0e4"})[f.k] || "#888"; }
+function buildBar(){                         // the progress bar: where every runner is in the race
+  const bar = $("pbar"); bar.innerHTML = '<div class="rail"></div>';
+  const at = fr => `calc(16px + (100% - 32px)*${fr})`, add = (cls,txt,fr) => { const e = document.createElement("div"); e.className = cls; e.textContent = txt; e.style.left = at(fr); bar.appendChild(e); return e; };
+  add("flag","🚩",0); add("flag","🏁",1);
+  [800,600,400,200].forEach(d => add("tick",d,1-d/RACE_M));
+  const info = document.createElement("div"); info.className = "info"; info.id = "pinfo"; bar.appendChild(info);
+  field.forEach(f => {
+    const e = add("dot",f.lane+1,0), c = dotColor(f), [r,g,b] = px(c);
+    e.style.background = c; e.style.color = (r*.3+g*.59+b*.11) > 150 ? "#222" : "#fff"; e.style.top = (11+(f.lane%2)*7)+"px"; f.dot = e;
+  });
+}
+function updBar(){
+  let leadF = null, best = -1;
+  field.forEach(f => { if(!f.stopped && !f.gone && f.fellT === undefined && (f.rw||0) > best){ best = f.rw||0; leadF = f; } });
+  field.forEach(f => {
+    if(!f.dot) return; const fr = Math.max(0, Math.min(1, (f.rw||0)/TRACK_LEN));
+    f.dot.style.left = `calc(16px + (100% - 32px)*${fr.toFixed(4)})`;
+    f.dot.className = "dot" + (f === leadF ? " lead" : "") + (f.stopped ? " out" : "") + (f.fellT !== undefined ? " sunk" : "");
+  });
+  const inf = $("pinfo"); if(inf) inf.textContent = racing ? `${Math.max(0, Math.round((1 - Math.min(1,best/TRACK_LEN))*RACE_M))} m to go  ·  race ${RACE_M} m` : `Race distance ${RACE_M} m`;
+}
+const JOKES = {                                    // [leader joke, back-marker joke, second leader joke]
+  Blizzard:["Blizzard's blowing them all away!","Blizzard is more of a light flurry at the moment.","It's a total whiteout for the rest, Blizzard's long gone!"],
+  Starlight:["Starlight's putting in a star performance!","Starlight has gone out of sight. Well, it is daytime.","Starlight is shining out in front!"],
+  Snowflake:["Snowflake is unique, and uniquely fast!","Snowflake is melting under the pressure!","Snowflake is on a roll, and no two races are alike!"],
+  Twinkle:["Twinkle toes is twinkling out in front!","Twinkle is twinkling at the back, but not quickly enough!","Twinkle, twinkle, little leader!"],
+  Cracker:["Cracker is going like a Christmas cracker! Bang, and out in front!","Cracker is a bit of a damp squib today.","That's a cracking run from Cracker!"],
+  Jingles:["Jingles is jingling all the way to the front!","Jingles is having a bell of a time at the back!","With a nose like that, Jingles can see exactly where they're going!"],
+  Dracula:["Dracula is really sinking his teeth into this race!","Dracula has no bite today!","Dracula is flying ahead, cape and all!"],
+  Frankenstein:["Frankenstein is bolting ahead!","Frankenstein has lost a few screws at the back!","It's alive! Frankenstein is alive and out in front!"],
+  Mummy:["Mummy has this race all wrapped up, so far!","Mummy is a bit tied up at the back!","Mummy is unravelling the field!"],
+  Werewolf:["Werewolf is howling along out in front!","Werewolf is having a ruff time at the back!","That's a hair-raising run from Werewolf!"],
+  Ghost:["Ghost is boo-ming out in front!","Ghost is running on pure spirit, but not much of it!","Nobody can touch Ghost, quite literally!"],
+  Skeleton:["Skeleton is running on bare bones, and loving it!","Skeleton has no guts for this one!","Skeleton is rattling the field!"],
+  Wilbur:["Wilbur is in front, and that's some pig!","Wilbur is taking it easy at the back!","Wilbur is really hogging the lead!"],
+  Truffles:["Truffles has sniffed out the lead!","Truffles is rooting around at the back!","Truffles is a real find out in front!"],
+  Hamlet:["To be, or not to be in front? Hamlet says to be!","Hamlet is dithering at the back. To be, or not to be?","Hamlet is hamming it up out in front!"],
+  Pickles:["Pickles is in front, and not in any kind of pickle!","Pickles is in a bit of a pickle at the back!","Pickles is cruising, it's all relish from here!"],
+  Snorty:["Snorty is snorting down the straight in front!","Snorty is snorting at the back, trying to catch up!","You can hear Snorty coming a mile off!"],
+  Porkchop:["Porkchop is chopping through the field!","Porkchop is a bit chopped off at the back!","Porkchop is going great, and nobody is saving their bacon now!"]
+};
+const THEME_JOKES = {
+  christmas:["Somebody tell them it isn't Christmas Eve yet!","Santa would be proud of that pace!","That's the fastest sleigh-pulling I've ever seen!","The jockeys need a warm coat out there!","I hope they've all been good this year!"],
+  halloween:["It's a monster of a race!","That's a spooktacular run!","Don't look behind you, whatever you do!","It's the graveyard shift, and they're working hard!","This is giving me goosebumps!"],
+  pigs:["That's mud in your eye, and everywhere else!","They're really hamming it up out there!","It's a proper pig of a track, all that mud!","Nothing beats a muddy farmyard dash!","Somebody is going to need a very big bath!"]
+};
+const MISHAP_JOKES = {
+  christmas:{refuse:["I think someone fancied a rest in the snow!","Maybe they just wanted a snowball fight!"], sink:["Brrr! That's one way to chill out!","Well, that's the coldest dip of the day!"]},
+  halloween:{refuse:["They've spotted their own name on the gravestone, I think!","Spooked by the gravestone, I'd say!"], sink:["I'm told the swamp monsters are very welcoming!","That's a swamp thing you don't see every day!"]},
+  pigs:{refuse:["Well, nobody can say they weren't warned about that fence!","That's a stubborn pig for you!"], sink:["Pigs do love a mud bath, but that's a bit extreme!","Well, that's one way to take a mud bath!"]}
+};
+function pickJoke(A,last){
+  const c = [], J = n => JOKES[n] || [];
+  if(J(A.n)[0]) c.push(J(A.n)[0], J(A.n)[2]); if(last && J(last.n)[1]) c.push(J(last.n)[1]);
+  c.push(...THEME_JOKES[theme.id], ...THEME_JOKES[theme.id]);
+  const fresh = c.filter(x => x && !cm.used[x]); if(!fresh.length) return null;
+  const j = PH(fresh); cm.used[j] = 1; return j;
+}
 function gapSay(px){ const L = px/LEN; return L < .3 ? "by a nose" : L < .75 ? "by a head" : L < 1.5 ? "by a length" : L < 2.5 ? "by two lengths" : L < 3.5 ? "by three lengths" : "by a distance"; }
-function cmReset(){ cm = {lead:null, said:0, upd:0, n:0, snapT:0, snap:null, gapPrev:undefined, lastTxt:"", obst:{}, sign:{}, refused:false, sank:false, won:false, started:false}; }
+function cmReset(){ cm = {jokeT:0, used:{}, lead:null, said:0, upd:0, n:0, snapT:0, snap:null, gapPrev:undefined, lastTxt:"", obst:{}, sign:{}, refused:false, sank:false, won:false, started:false}; }
 function commentary(t){                            // called every frame during a race
   if(!commentaryOn || !TTS) return;
   if(!cm.started){ cm.started = true; say(PH(["And they're off!", "And they're away!", "They're off and racing!"]), {urgent:true, rate:1.3, pitch:1.14}); return; }
   for(const f of field){                           // mishaps: top priority
-    if(f.stopped && !cm.refused){ cm.refused = true; say(`Oh no! ${f.n} has refused at the ${theme.jumpName}! That's ${f.n}'s race over!`, {urgent:true, rate:1.25, pitch:1.14}); return; }
-    if(f.fe > .35 && !cm.sank){ cm.sank = true; say(`Oh dear! ${f.n} has fallen in the ${theme.waterName}, and sunk without trace!`, {urgent:true, rate:1.25, pitch:1.14}); return; }
+    if(f.stopped && !cm.refused){ cm.refused = true; say(`Oh no! ${f.n} has refused at the ${theme.jumpName}! That's ${f.n}'s race over!`, {urgent:true, rate:1.25, pitch:1.14}); say(PH(MISHAP_JOKES[theme.id].refuse), {rate:1.2, pitch:1.08}); return; }
+    if(f.fe > .35 && !cm.sank){ cm.sank = true; say(`Oh dear! ${f.n} has fallen in the ${theme.waterName}, and sunk without trace!`, {urgent:true, rate:1.25, pitch:1.14}); say(PH(MISHAP_JOKES[theme.id].sink), {rate:1.2, pitch:1.08}); return; }
   }
   const ro = field.filter(f => !f.gone && !f.stopped).sort((a,b) => b.rw - a.rw), A = ro[0], B = ro[1], C = ro[2];
   if(finished.length && !cm.won){
@@ -928,6 +1000,7 @@ function commentary(t){                            // called every frame during 
   if(!cm.snap || t - cm.snapT > 7){ cm.snap = {}; ro.forEach((f,i) => cm.snap[f.n] = i+1); cm.snapT = t; }
   if(t > 3 && t - cm.upd > (prog > .85 ? 3 : 3.8)){                     // regular running commentary
     cm.upd = t; const last = ro[ro.length-1], D = ro[3], gap = A.rw - B.rw, hot = [], gen = [];
+    if(t - cm.jokeT > 10 && Math.random() < .85){ const j = pickJoke(A,last); if(j){ cm.jokeT = t; say(j, {rate, pitch}); return; } }
     gen.push(gap/LEN > 3.5 ? `${A.n} is well clear of ${B.n}, with ${C.n} third!` : `${A.n} leads ${B.n} ${gapSay(gap)}, with ${C.n} third!`);
     gen.push(`It's ${A.n}, then ${B.n}, then ${C.n}!`);
     gen.push(`${A.n} is out in front, and looking good!`, `${A.n} is setting the pace, with ${B.n} right on the tail!`, `${B.n} sits second, and ${C.n} is third!`);
