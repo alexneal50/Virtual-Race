@@ -21,17 +21,21 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #vsel{font:inherit;padding:8px;border-radius:10px;border:2px solid var(--accent);background:var(--card);color:var(--ink);max-width:230px}
 #race{padding:0;justify-content:flex-start;gap:0}
 #bar{display:flex;gap:10px;align-items:center;padding:8px;width:100%;justify-content:center;background:var(--card)}
-#stage{width:100%;max-width:calc((100vh - 178px)*2);margin:0 auto}
+#stage{width:100%;max-width:calc((100vh - 232px)*2);margin:0 auto}
 #cv{display:block;width:100%;aspect-ratio:2/1;height:auto}
-#pbar{position:relative;height:52px;margin:2px 0 4px;font-family:system-ui,sans-serif}
-#pbar .rail{position:absolute;left:16px;right:16px;top:23px;height:8px;border-radius:6px;background:linear-gradient(90deg,#8bd0ff,#fff 55%,#ffd24d);box-shadow:inset 0 1px 3px rgba(0,0,0,.35)}
-#pbar .tick{position:absolute;top:34px;transform:translateX(-50%);font-size:10px;font-weight:700;color:var(--ink);opacity:.75}
-#pbar .flag{position:absolute;top:0;transform:translateX(-50%);font-size:16px}
+#pbar{position:relative;height:102px;margin:2px 0 4px;font-family:system-ui,sans-serif}
+#pbar .rail{position:absolute;left:16px;right:16px;top:39px;height:8px;border-radius:6px;background:linear-gradient(90deg,#8bd0ff,#fff 55%,#ffd24d);box-shadow:inset 0 1px 3px rgba(0,0,0,.35)}
+#pbar .tick{position:absolute;top:50px;transform:translateX(-50%);font-size:10px;font-weight:700;color:var(--ink);opacity:.75}
+#pbar .flag{position:absolute;top:17px;transform:translateX(-50%);font-size:16px}
 #pbar .info{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;top:-2px;font-size:13px;font-weight:800;color:var(--ink)}
 #pbar .dot{position:absolute;width:22px;height:22px;margin-left:-11px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.55);font:800 11px/18px system-ui,sans-serif;text-align:center;transition:left .1s linear}
 #pbar .dot.lead{transform:scale(1.3);z-index:5;box-shadow:0 0 10px 3px #ffd24d}
 #pbar .dot.out{filter:grayscale(1);opacity:.65}
 #pbar .dot.sunk{opacity:.3}
+#pbar .order{position:absolute;left:12px;right:12px;top:72px;display:flex;gap:6px;flex-wrap:nowrap;overflow:hidden}
+#pbar .chip{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:6px;padding:3px 8px;border-radius:8px;font:700 13px/20px system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+#pbar .chip b{font-size:15px}
+#pbar .chip.out{filter:grayscale(1);opacity:.55}
 #res{min-height:2.4em;padding:8px;font-weight:700}
 #fin{position:fixed;inset:0;z-index:99;display:none;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;color:#fff}
 #fin.on{display:flex}
@@ -910,11 +914,13 @@ function buildBar(){                         // the progress bar: where every ru
   add("flag","🚩",0); add("flag","🏁",1);
   [800,600,400,200].forEach(d => add("tick",d,1-d/RACE_M));
   const info = document.createElement("div"); info.className = "info"; info.id = "pinfo"; bar.appendChild(info);
+  const ord = document.createElement("div"); ord.className = "order"; ord.id = "porder"; bar.appendChild(ord); lastOrd = "";
   field.forEach(f => {
     const e = add("dot",f.lane+1,0), c = dotColor(f), [r,g,b] = px(c);
-    e.style.background = c; e.style.color = (r*.3+g*.59+b*.11) > 150 ? "#222" : "#fff"; e.style.top = (11+(f.lane%2)*7)+"px"; f.dot = e;
+    e.style.background = c; e.style.color = (r*.3+g*.59+b*.11) > 150 ? "#222" : "#fff"; e.style.top = (27+(f.lane%2)*7)+"px"; f.dot = e;
   });
 }
+let lastOrd = "";
 function updBar(){
   let leadF = null, best = -1;
   field.forEach(f => { if(!f.stopped && !f.gone && f.fellT === undefined && (f.rw||0) > best){ best = f.rw||0; leadF = f; } });
@@ -923,7 +929,15 @@ function updBar(){
     f.dot.style.left = `calc(16px + (100% - 32px)*${fr.toFixed(4)})`;
     f.dot.className = "dot" + (f === leadF ? " lead" : "") + (f.stopped ? " out" : "") + (f.fellT !== undefined ? " sunk" : "");
   });
-  const inf = $("pinfo"); if(inf) inf.textContent = racing ? `${Math.max(0, Math.round((1 - Math.min(1,best/TRACK_LEN))*RACE_M))} m to go  ·  race ${RACE_M} m` : `Race distance ${RACE_M} m`;
+  const inf = $("pinfo"); if(inf) inf.textContent = racing ? `Race ${raceNo} of ${EVENT_RACES}  ·  ${Math.max(0, Math.round((1 - Math.min(1,best/TRACK_LEN))*RACE_M))} m to go` : `Race ${raceNo} of ${EVENT_RACES}  ·  ${RACE_M} m`;
+  const key = o => o.stopped || o.gone || o.fellT !== undefined ? 1e9 : o.done ? -1e6 + finished.indexOf(o) : -(o.rw||0);       // running order: finishers, then by distance, then the fallers
+  const arr = [...field].sort((a,b) => key(a) - key(b)), sig = arr.map(f => f.lane + (key(f) === 1e9 ? "x" : "")).join();
+  const od = $("porder"); if(od && sig !== lastOrd){
+    lastOrd = sig; od.innerHTML = "";
+    arr.forEach((f,i) => { const c = dotColor(f), [r,g,b] = px(c), e = document.createElement("span"), out = key(f) === 1e9;
+      e.className = "chip" + (out ? " out" : ""); e.style.background = c; e.style.color = (r*.3+g*.59+b*.11) > 150 ? "#222" : "#fff";
+      const bb = document.createElement("b"); bb.textContent = out ? (f.fellT !== undefined ? "💧" : "✖") : (i+1); e.appendChild(bb); e.appendChild(document.createTextNode(f.n)); od.appendChild(e); });
+  }
 }
 const JOKES = {                                    // [leader joke, back-marker joke, second leader joke]
   Blizzard:["Blizzard's blowing them all away!","Blizzard is more of a light flurry at the moment.","It's a total whiteout for the rest, Blizzard's long gone!"],
@@ -962,8 +976,47 @@ function pickJoke(A,last){
   const fresh = c.filter(x => x && !cm.used[x]); if(!fresh.length) return null;
   const j = PH(fresh); cm.used[j] = 1; return j;
 }
+const PERSONA = {                                    // original lines for an over-excited, slightly unhinged commentator; {n} = runner, {a}/{b} = a pair
+  christmas:{
+    lead:["{n} hits the front! That's the sort of thing that gets you on the nice list!","Here comes {n}! My tinsel is standing on end!","{n} takes over! Faster than a sleigh on a frozen hill!","And it's {n} in front! Somebody fetch me a sprout, I need to calm down!","{n} storms through! More twists in this race than in a string of fairy lights!"],
+    behind:["{n} is at the back! Probably still wrapping presents!","{n} is so far behind, they're practically racing next year!","Oh dear, {n} has stopped to admire the snow!","{n} is bringing up the rear, and enjoying every second, I'm sure!"],
+    clear:["{n} is clear! Check for a turbo-charged jingle bell!","{n} is pulling away! They've clearly eaten all their sprouts!","It's all {n} now! The rest are only here for the hot chocolate!"],
+    neck:["{a} and {b}, neck and neck! I can't watch! Actually I can!","There's nothing between {a} and {b}! Not even a candy cane!","{a} and {b} are stuck together like tinsel to a jumper!"],
+    half:["Halfway! {n} leads! My voice is going already!","That's the halfway mark and {n} is in front! My hat is spinning!"],
+    final:["Two hundred to go, {n} in front! I'm shouting so much my hat has fallen off!","The final stretch! {n} leads! Come on, come on, come on!"],
+    win:["{n} wins! I may need a moment! And a biscuit!","It's {n}! The champion of the North Pole!","{n} wins it! Somebody call Santa, he'll want to see this!"],
+    last:["And bringing up the rear, {n}. Chin up!","Last place goes to {n}. There's always next Christmas!"],
+    congrats:["Well done to everyone who backed {n}! Take a bow, you geniuses!","If you backed {n}, you're on Santa's very nice list tonight!"],
+    jump:["A snow bank! Nobody has ever fallen over a snow bank, apart from everybody!","Snow bank ahead! It's like a very cold speed bump!"],
+    water:["The ice river! Mind your footing, it's slippier than my jokes!","Here's the ice river! Please don't make a splash, my notes are in my pocket!"]},
+  halloween:{
+    lead:["{n} takes the lead! That's a monster move!","{n} hits the front, and the crowd is screaming! Mostly happy screaming!","{n} goes to the front! Absolutely spook-tacular!","And now it's {n}! This race is scarier than my last tax return!","{n} storms ahead! Somebody pinch me! Ow! Not that hard!"],
+    behind:["{n} is at the back! Don't worry, there's always next Halloween!","{n} is so far behind, they're practically a ghost of a chance!","{n} is lagging! Maybe they stopped to read their own gravestone!","{n} brings up the rear! It's a dead loss, I'm afraid!"],
+    clear:["{n} is miles clear! They must be running on pure witchcraft!","{n} is pulling away! That's a creepy turn of pace!","It's all {n} now! The rest look like they've seen a ghost!"],
+    neck:["{a} and {b}, neck and neck! This is bone-chilling stuff!","{a} and {b} are inseparable, like cobwebs and corners!","There's nothing between {a} and {b}! Not even a sheet of paper!"],
+    half:["Halfway! {n} leads, and the graveyard is going wild!","Halfway there! {n} in front! I'm already hoarse, and not the horse kind!"],
+    final:["Two hundred to go! {n} in front! My heart is racing! Well, it was!","Final stretch! {n} leads! This is the scariest finish of the night!"],
+    win:["{n} wins! What a night! I'm off to scream into a pillow!","It's {n}! The champion of the graveyard!","{n} wins it! Absolutely monstrous!"],
+    last:["And last, {n}. Dead last, in fact. Sorry!","Bringing up the rear, {n}. Better luck next full moon!"],
+    congrats:["Everyone who backed {n}, give yourselves a round of applause! No, a round of boos! No, applause!","If you backed {n}, you are officially a wizard!"],
+    jump:["A gravestone! Hurdles with a bit of history!","Gravestone ahead! Try not to disturb anyone!"],
+    water:["The swamp! I'm told it's lovely at this time of year, if you're a frog!","Here comes the swamp! Nobody look down!"]},
+  pigs:{
+    lead:["{n} hits the front! They're really hogging the lead!","Here comes {n}! This race is going like a greased pig! Which is fair, it is one!","{n} goes to the front! Somebody tell the farmer!","And now it's {n} in front! Pigs might fly! That one's nearly airborne!","{n} storms ahead! That's what I call pig-headed determination!"],
+    behind:["{n} is at the back! Perhaps they've smelled lunch!","{n} is so far behind, they're practically in the next field!","Oh dear, {n} has stopped to roll in some mud! Typical!","{n} is bringing up the rear! It's all part of the plan, I'm sure!"],
+    clear:["{n} is miles clear! Somebody check that trough for rocket fuel!","{n} is pulling away! The rest are eating their mud!","It's all {n} now! The others just can't keep up the pace!"],
+    neck:["{a} and {b}, neck and neck! Too close to call! Almost too close to oink!","There's nothing between {a} and {b}! Not even a bit of straw!","{a} and {b} are side by side, like two peas in a pod! Muddy peas!"],
+    half:["Halfway! {n} leads the way! I'm sweating like a pig! Which is ironic, they can't sweat!","That's halfway, and {n} is in front! This is better than a county fair!"],
+    final:["Two hundred to go! {n} in front! This is the squealing climax!","Final stretch! {n} leads! I can barely contain my snorts!"],
+    win:["{n} wins! That's a result worth squealing about!","It's {n}! The king of the farmyard!","{n} wins it! Somebody get that pig a prize marrow!"],
+    last:["And last, {n}. Well, somebody has to be!","Bringing up the rear, {n}. Chin up, or should that be snout up!"],
+    congrats:["Well done to everyone who backed {n}! You're going to be rolling in it! Mostly mud, but still!","If you backed {n}, you deserve a gold-plated trough!"],
+    jump:["A fence! Pigs and fences, what could possibly go wrong?","Fence ahead! Pigs are famously good at jumping. Allegedly!"],
+    water:["The muddy puddle! This is basically a spa day for a pig!","Here comes the puddle! Somebody hold my wellies!"]}
+};
+const fillL = (cat, v = {}) => PH(PERSONA[theme.id][cat]).replace(/\{(\w)\}/g, (m,k) => v[k] ?? m);
 function gapSay(px){ const L = px/LEN; return L < .3 ? "by a nose" : L < .75 ? "by a head" : L < 1.5 ? "by a length" : L < 2.5 ? "by two lengths" : L < 3.5 ? "by three lengths" : "by a distance"; }
-function cmReset(){ cm = {jokeT:0, used:{}, lead:null, said:0, upd:0, n:0, snapT:0, snap:null, gapPrev:undefined, lastTxt:"", obst:{}, sign:{}, refused:false, sank:false, won:false, started:false}; }
+function cmReset(){ cm = {half:false, jokeT:0, used:{}, lead:null, said:0, upd:0, n:0, snapT:0, snap:null, gapPrev:undefined, lastTxt:"", obst:{}, sign:{}, refused:false, sank:false, won:false, started:false}; }
 function commentary(t){                            // called every frame during a race
   if(!commentaryOn || !TTS) return;
   if(!cm.started){ cm.started = true; say(PH(["And they're off!", "And they're away!", "They're off and racing!"]), {urgent:true, rate:1.3, pitch:1.14}); return; }
@@ -974,7 +1027,7 @@ function commentary(t){                            // called every frame during 
   const ro = field.filter(f => !f.gone && !f.stopped).sort((a,b) => b.rw - a.rw), A = ro[0], B = ro[1], C = ro[2];
   if(finished.length && !cm.won){
     cm.won = true; const sec = ro.find(f => f !== finished[0]);
-    say(`And ${finished[0].n} wins it${sec && finished[0].rw - sec.rw < LEN ? ", just ahead of " + sec.n : ""}! What a finish!`, {urgent:true, rate:1.3, pitch:1.16});
+    say(fillL("win",{n:finished[0].n}) + (sec && finished[0].rw - sec.rw < LEN ? ` And ${sec.n} was right behind!` : ""), {urgent:true, rate:1.3, pitch:1.16});
   }
   if(cm.won || !A || !B || !C) return;
   const prog = A.rw/TRACK_LEN, tight = A.rw - B.rw < 2*LEN;                  // the closer and later the race, the more excited the voice
@@ -983,18 +1036,19 @@ function commentary(t){                            // called every frame during 
     if(!cm.sign[d] && A.wx > START_X + TRACK_LEN*(1-d/RACE_M) + 60){
       cm.sign[d] = 1; cm.upd = t;
       const lines = {800:`Eight hundred metres to go! ${A.n} leads from ${B.n}!`, 600:`Six hundred to go, and ${A.n} is still in front!`, 400:`Four hundred to go! ${A.n} leads, ${B.n} second, ${C.n} third!`,
-        200:`Two hundred to go! ${A.n} leads from ${B.n}! Here we go!`, 100:`A hundred to go! ${A.n} in front, and ${B.n} is coming at them!`};
+        200:fillL("final",{n:A.n}), 100:`A hundred to go! ${A.n} in front, and ${B.n} is coming at them!`};
       say(lines[d], d <= 200 ? {urgent:true, rate:Math.min(1.3,rate+.04), pitch:pitch+.02} : {rate, pitch}); return;
     }
   }
   OBS.forEach((o,i) => {
     if(!cm.obst[i] && A.wx > o.x - 650 && A.wx < o.x - 150){
       cm.obst[i] = 1; if(Math.random() < .35) return; const n = o.k === "water" ? theme.waterName : theme.jumpName;
-      say(PH([`Here comes the ${n}!`, `Now for the ${n}!`, `They're approaching the ${n}!`, `The ${n} is next!`]), {skipIfBusy:true, rate, pitch});
+      say(Math.random() < .55 ? PH(PERSONA[theme.id][o.k === "water" ? "water" : "jump"]) : PH([`Here comes the ${n}!`, `Now for the ${n}!`, `They're approaching the ${n}!`, `The ${n} is next!`]), {skipIfBusy:true, rate, pitch});
     }
   });
+  if(!cm.half && A.rw >= TRACK_LEN/2){ cm.half = true; say(fillL("half",{n:A.n}), {rate, pitch}); return; }
   if(cm.lead !== A){                               // new leader
-    if(cm.lead && t > 5 && t - cm.said > 5 && A.rw - B.rw > 30){ say(PH([`${A.n} takes the lead!`, `${A.n} goes to the front!`, `And it's ${A.n} in front now!`, `${A.n} hits the front!`]), {skipIfBusy:true, rate:Math.min(1.3,rate+.04), pitch:pitch+.02}); cm.said = t; }
+    if(cm.lead && t > 5 && t - cm.said > 5 && A.rw - B.rw > 30){ say(fillL("lead",{n:A.n}), {skipIfBusy:true, rate:Math.min(1.3,rate+.04), pitch:pitch+.02}); cm.said = t; }
     cm.lead = A;
   }
   if(!cm.snap || t - cm.snapT > 7){ cm.snap = {}; ro.forEach((f,i) => cm.snap[f.n] = i+1); cm.snapT = t; }
@@ -1007,13 +1061,15 @@ function commentary(t){                            // called every frame during 
     if(D && last !== D) gen.push(`Then ${D.n}, and ${last.n} is bringing up the rear!`);
     if(last !== C && prog < .6) gen.push(`${last.n} is at the back, but there's a long way to go!`);
     if(last !== C && prog >= .6) gen.push(`${last.n} is struggling at the back now!`);
+    if(last !== C) gen.push(fillL("behind",{n:last.n}));
+    if(gap/LEN > 3.5) gen.push(fillL("clear",{n:A.n}));
     if(prog > .85) gen.push(`Into the final stretch! ${A.n} leads!`, `Not long to go now! ${A.n} in front, ${B.n} second!`);
     if(Math.random() < .12) gen.push(PH(["What a race this is!", "They're flying now!", "Oh, this is exciting!", "Come on, come on!"]));
     ro.forEach((f,i) => {
       const was = cm.snap[f.n] || i+1;
       if(was - (i+1) >= 1) hot.push(PH([`${f.n} is making ground, up to ${ORD[i+1]}!`, `${f.n} is coming through, up to ${ORD[i+1]} now!`, `Look at ${f.n}, flying up to ${ORD[i+1]}!`]));
       if((i+1) - was >= 1 && i > 0) hot.push(`${f.n} is dropping back, down to ${ORD[i+1]}!`);
-      if(i < ro.length-1 && f.rw - ro[i+1].rw < 90) hot.push(`${f.n} and ${ro[i+1].n}, neck and neck for ${ORD[i+1]}! Oh, this is close!`);
+      if(i < ro.length-1 && f.rw - ro[i+1].rw < 90) hot.push(fillL("neck",{a:f.n,b:ro[i+1].n}));
     });
     if(cm.gapPrev !== undefined){ const dg = gap - cm.gapPrev; if(dg > 120) hot.push(`${A.n} is pulling clear!`); else if(dg < -120) hot.push(`${B.n} is closing on ${A.n}!`, `${B.n} is coming at ${A.n}!`); }
     cm.gapPrev = gap;
@@ -1028,6 +1084,8 @@ function announceResult(){
   if(refuser) txt += ` ${refuser.n} refused at the ${theme.jumpName}.`;
   if(sinker) txt += ` And ${sinker.n} fell in the ${theme.waterName} and sank.`;
   say(txt, {rate:1.1, pitch:1.06});
+  const lastF = finished[finished.length-1];
+  say(fillL("last",{n:lastF.n}), {rate:1.1, pitch:1.06}); say(fillL("congrats",{n:a.n}), {rate:1.1, pitch:1.06});
 }
 function star(x,y,r,c){ ctx.fillStyle = c; ctx.beginPath(); for(let i=0;i<10;i++){ const a = -Math.PI/2+i*Math.PI/5, rr = i%2 ? r*.45 : r; ctx[i ? "lineTo" : "moveTo"](x+Math.cos(a)*rr,y+Math.sin(a)*rr); } ctx.fill(); }
 const ANT = [   // six different antler shapes
