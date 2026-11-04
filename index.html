@@ -20,6 +20,23 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .err{color:#d33;min-height:1.2em}
 .screen.scroll{justify-content:flex-start;overflow-y:auto}
 .ghost{background:transparent;color:var(--accent)}
+#host{position:fixed;left:14px;bottom:14px;z-index:30;display:flex;flex-direction:column;align-items:flex-start;gap:4px;pointer-events:none}
+#hostBubble{max-width:min(440px,72vw);background:#fff;color:#06435c;border:3px solid var(--accent);border-radius:16px;padding:8px 14px;font-weight:700;font-size:clamp(.85rem,1.5vw,1.1rem);line-height:1.35;box-shadow:0 4px 12px rgba(0,0,0,.35);display:none}
+#hostSvg{filter:drop-shadow(0 4px 6px rgba(0,0,0,.4))}
+#mouth{transform-box:fill-box;transform-origin:center}
+#host.talk #mouth{animation:yap .2s ease-in-out infinite alternate}
+#host.talk #hostSvg{animation:nod .45s ease-in-out infinite alternate}
+@keyframes yap{from{transform:scaleY(.3)}to{transform:scaleY(1.2)}}
+@keyframes nod{to{transform:translateY(-4px) rotate(2deg)}}
+.switchrow{display:flex;align-items:center;gap:12px;font-weight:800;font-size:1.15rem}
+.switch{position:relative;display:inline-block;width:68px;height:34px;flex-direction:row}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#2e9d4f;border-radius:34px;transition:.25s;cursor:pointer}
+.slider:before{content:"";position:absolute;width:28px;height:28px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.switch input:checked + .slider{background:#8a3fd6}
+.switch input:checked + .slider:before{transform:translateX(34px)}
+.hint{max-width:520px;margin:0;opacity:.85}
+.ewbox{display:flex;flex-direction:row;align-items:center;gap:4px;font-weight:800;font-size:.85rem;white-space:nowrap}
 textarea{font:inherit;padding:10px;border-radius:10px;border:2px solid var(--accent);background:var(--card);color:var(--ink);width:min(92vw,420px)}
 .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;align-items:flex-end}
 label{display:flex;flex-direction:column;gap:4px;text-align:left;font-weight:700}
@@ -122,11 +139,15 @@ select{font:inherit;padding:6px;border-radius:8px;border:2px solid var(--accent)
   <h1 id="setupTitle">Set up the night</h1>
   <p>Add the players. Before each race everyone backs a runner, and the game works out the payouts and standings.</p>
   <label>Players (one per line)<textarea id="plist" rows="8" placeholder="Alex&#10;Sam&#10;Jo"></textarea></label>
+  <div class="switchrow"><span>💷 Money</span><label class="switch"><input type="checkbox" id="ptsMode"><span class="slider"></span></label><span>⭐ Points</span></div>
+  <p id="modeHint" class="hint"></p>
   <div class="row">
-    <label>Stake per bet <input id="stake" type="number" min="0" step="0.5" value="1"></label>
-    <label>Currency <input id="cur" value="£" maxlength="3"></label>
+    <label><span id="stakeLbl">Stake per bet</span> <input id="stake" type="number" min="0" step="0.5" value="1"></label>
+    <label id="curLbl">Currency <input id="cur" value="£" maxlength="3"></label>
   </div>
-  <label class="chk"><input type="checkbox" id="refund"> Refund bets on runners that refuse or sink</label>
+  <label class="chk"><input type="checkbox" id="ewDef"> Bets are each-way by default (you can change it per player)</label>
+  <label>Each-way places paid <select id="places"><option value="2:0.25">2 places at ¼ odds (standard for small fields)</option><option value="3:0.2">3 places at ⅕ odds</option></select></label>
+  <label class="chk" id="refundLbl"><input type="checkbox" id="refund"> Refund bets on runners that refuse or sink</label>
   <div class="err" id="setupErr"></div>
   <div class="row"><button id="goNight">Start the night ▶</button><button id="goPlain" class="ghost">Race without betting</button><button id="setupBack" class="ghost">← Back</button></div>
 </section>
@@ -173,6 +194,7 @@ select{font:inherit;padding:6px;border-radius:8px;border:2px solid var(--accent)
     <canvas id="cv"></canvas>
   </div>
   <div id="res"></div>
+  <div id="host" style="display:none"><div id="hostBubble"></div><svg id="hostSvg" viewBox="0 0 130 140" width="150" height="161"></svg></div>
 </section>
 
 <div id="fin">
@@ -279,8 +301,8 @@ function sx(w){ return w - camX; }                       // one true mapping: tr
 const SQ0 = 450, SQK = .3, squeeze = d => d <= SQ0 ? d : SQ0 + (d-SQ0)*SQK;   // keeps a long way back runners on screen by really closing the gap
 let theme, field = [], racing = false, t0 = 0, camX = 0, finished = [];
 
-function openRace(key){ theme = THEMES[key]; theme.id = key; stopIdle(); sfx.bedStop(); cdText = ""; racing = false; introActive = false; stopSpeech(); $("skip").style.display = "none"; $("start").disabled = false; raceNo = 1; $("start").style.display = ""; $("start").textContent = "Start race 1 of " + EVENT_RACES; setTitle(); $("res").textContent = ""; setup(); show("race"); fit(); draw(0); }
-$("back").onclick = () => { if(night && !confirm("Leave this night? The standings will be lost.")) return; night = null; stopIdle(); sfx.bedStop(); cdText = ""; racing = false; $("start").disabled = false; cancelAnimationFrame(idleRaf); introActive = false; skipFlag = true; stopSpeech(); $("skip").style.display = "none"; show("menu"); };
+function openRace(key){ theme = THEMES[key]; theme.id = key; hostOff(); stopIdle(); sfx.bedStop(); cdText = ""; racing = false; introActive = false; stopSpeech(); $("skip").style.display = "none"; $("start").disabled = false; raceNo = 1; $("start").style.display = ""; $("start").textContent = "Start race 1 of " + EVENT_RACES; setTitle(); $("res").textContent = ""; setup(); show("race"); fit(); draw(0); }
+$("back").onclick = () => { if(night && !confirm("Leave this night? The standings will be lost.")) return; night = null; hostOff(); stopIdle(); sfx.bedStop(); cdText = ""; racing = false; $("start").disabled = false; cancelAnimationFrame(idleRaf); introActive = false; skipFlag = true; stopSpeech(); $("skip").style.display = "none"; show("menu"); };
 $("start").onclick = () => { audio(); if(!racing && !introActive) begin(); };
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
@@ -405,7 +427,7 @@ function portrait(f){                       // reuse deer() to paint a close-up
   ctx = real; noLabel = false; return c;
 }
 function showFinish(){
-  const pod = $("pod"); pod.innerHTML = ""; $("fnote").textContent = mishaps("\n"); announceResult();
+  hostOff(); const pod = $("pod"); pod.innerHTML = ""; $("fnote").textContent = mishaps("\n"); announceResult();
   const last = raceNo >= EVENT_RACES;
   $("ftitle").textContent = last ? "🏁 FINAL RACE RESULT 🏁" : `🏁 RACE ${raceNo} OF ${EVENT_RACES} 🏁`;
   $("fmsg").textContent = night ? "That's the result! Payouts and standings are up next." : last ? "That was the last race of the event! Update your sheets and pay your winnings." : "Update your sheets, pay your winnings and when you are ready start the next race.";
@@ -943,8 +965,8 @@ function pump(){
   const u = new SpeechSynthesisUtterance(text); u.lang = voice ? voice.lang : "en-GB"; if(voice) u.voice = voice;
   u.rate = Math.min(1.35, (o.rate || 1.12)*(.97+Math.random()*.06)); u.pitch = (o.pitch || 1.04)*(.98+Math.random()*.04);   // small random variation so it never sounds mechanical
   let done = false, tm = 0, tries = 0;
-  const me = { fin(quiet){ if(done) return; done = true; clearTimeout(tm); if(cur === me) cur = null; res(); if(!quiet) pump(); } };
-  cur = me; u.onend = () => me.fin(); u.onerror = () => me.fin();
+  const me = { fin(quiet){ if(done) return; done = true; clearTimeout(tm); if(cur === me) cur = null; res(); if(!quiet) pump(); if(!cur) hostQuiet(); } };
+  cur = me; u.onend = () => me.fin(); u.onerror = () => me.fin(); if(hostOnFlag) hostSpeak(text);
   const arm = () => { tm = setTimeout(() => { if(speechSynthesis.speaking && ++tries < 6) arm(); else me.fin(); }, 3500 + text.length*120); }; arm();   // safety net if 'end' never fires
   try{ speechSynthesis.speak(u); }catch(e){ me.fin(); }
 }
@@ -955,7 +977,7 @@ function startIdle(){ idleRun = true; const loop = now => { if(!idleRun) return;
 function stopIdle(){ idleRun = false; cancelAnimationFrame(idleRaf); field.forEach(f => { f.hi = false; f.jy = 0; f.air = false; }); }
 async function begin(keep){                      // keep = the runners were already set up (coming from the betting screen)
   stopSpeech(); if(!keep) setup(); draw(0);
-  introActive = true; skipFlag = false; $("start").style.display = "none"; startIdle();
+  introActive = true; skipFlag = false; $("start").style.display = "none"; startIdle(); if(commentaryOn) hostOn();
   if(commentaryOn) await intro();
   if(!introActive) return;
   await countdown();
@@ -971,7 +993,7 @@ async function intro(){
   $("skip").style.display = ""; $("res").textContent = "🎙️ Meet the runners…";
   await say((raceNo === 1 ? `Hello, and welcome to ${theme.say}! Race 1 of ${EVENT_RACES}. ` : PH([`And now, race ${raceNo} of ${EVENT_RACES}! `, `Here we go with race ${raceNo} of ${EVENT_RACES}! `])) + "Here are your runners!", {rate:1.12, pitch:1.08});
   for(const f of field){ if(!introActive || skipFlag) break; f.hi = true; await say(`Number ${f.lane+1}... ${f.n}... ${oddsSay(f.odds)}!`, {rate:1.04, pitch:1.06}); f.hi = false; }
-  if(introActive && !skipFlag) await say(`${field[0].n} is the favourite at ${oddsSay(field[0].odds)}, and ${field[5].n} is the outsider at ${oddsSay(field[5].odds)}!`, {rate:1.1, pitch:1.06});
+  if(introActive && !skipFlag){ for(const line of rundown()){ if(!introActive || skipFlag) break; await say(line, {rate:1.08, pitch:1.05}); } }
   if(introActive && !skipFlag) await say("They're at the start now... and they're under starter's orders!", {rate:1.06, pitch:1.08});
   field.forEach(f => { f.hi = false; });
   $("skip").style.display = "none";
@@ -980,7 +1002,7 @@ $("skip").onclick = () => { skipFlag = true; stopSpeech(); };
 function syncSnd(){ $("snd").textContent = commentaryOn ? "🔊 Commentary on" : "🔇 Commentary off"; }
 $("snd").onclick = () => {
   commentaryOn = !commentaryOn; try{ localStorage.setItem("vr_comm", commentaryOn ? "on" : "off"); }catch(e){}
-  if(commentaryOn) say("Commentary on.", {urgent:true}); else stopSpeech();
+  if(commentaryOn) say("Commentary on.", {urgent:true}); else { stopSpeech(); hostOff(); }
   syncSnd();
 };
 if(!TTS) $("snd").style.display = "none";
@@ -1093,6 +1115,42 @@ const PERSONA = {                                    // original lines for an ov
     water:["The muddy puddle! This is basically a spa day for a pig!","Here comes the puddle! Somebody hold my wellies!"]}
 };
 const fillL = (cat, v = {}) => PH(PERSONA[theme.id][cat]).replace(/\{(\w)\}/g, (m,k) => v[k] ?? m);
+/* ---------- The host: an animated cartoon commentator with a speech bubble ---------- */
+let hostOnFlag = false, hostTm = 0;
+function hostArt(){
+  const face = (skin,ol) => `<circle cx="65" cy="80" r="38" fill="${skin}" stroke="${ol}" stroke-width="3"/><ellipse cx="52" cy="76" rx="6" ry="7" fill="#fff"/><ellipse cx="80" cy="76" rx="6" ry="7" fill="#fff"/><circle cx="54" cy="77" r="3.2" fill="#222"/><circle cx="82" cy="77" r="3.2" fill="#222"/><path d="M44 64 Q52 58 60 63 M70 63 Q78 58 86 64" stroke="${ol}" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse id="mouth" cx="66" cy="97" rx="13" ry="9" fill="#7a1f2e" stroke="${ol}" stroke-width="2.5"/>`;
+  const mic = `<rect x="98" y="108" width="8" height="24" rx="4" fill="#444"/><circle cx="102" cy="105" r="10" fill="#9aa" stroke="#333" stroke-width="2.5"/>`;
+  if(theme.id === "halloween") return face("#b9d8a0","#2c4a24") + `<path d="M56 91 L60 104 L64 91Z M70 91 L74 104 L78 91Z" fill="#fff"/><rect x="40" y="12" width="50" height="38" fill="#1a1423" stroke="#000" stroke-width="2"/><rect x="26" y="48" width="78" height="10" rx="4" fill="#1a1423"/><rect x="40" y="38" width="50" height="8" fill="#8a3fd6"/><path d="M48 124 L65 116 L82 124 L65 134Z" fill="#a3122b"/>` + mic;
+  if(theme.id === "pigs") return face("#f2c9a0","#8a5a35") + `<g fill="#b9703a"><circle cx="46" cy="88" r="1.8"/><circle cx="52" cy="92" r="1.8"/><circle cx="84" cy="88" r="1.8"/><circle cx="78" cy="92" r="1.8"/></g><ellipse cx="65" cy="52" rx="54" ry="12" fill="#e6c15a" stroke="#a67c24" stroke-width="3"/><path d="M38 52 Q40 20 65 20 Q90 20 92 52Z" fill="#e6c15a" stroke="#a67c24" stroke-width="3"/><rect x="38" y="41" width="54" height="7" fill="#c0392b"/><path d="M44 116 L86 116 L65 136Z" fill="#c0392b"/>` + mic;
+  return `<path d="M28 84 L8 68 L30 98Z M102 84 L122 68 L100 98Z" fill="#f6cfa8" stroke="#8a5a35" stroke-width="3"/>` + face("#f6cfa8","#8a5a35") + `<path d="M28 58 Q64 -8 104 50 L98 62 Q66 40 32 64Z" fill="#d8232a" stroke="#7a1010" stroke-width="3"/><circle cx="104" cy="48" r="9" fill="#fff" stroke="#bbb" stroke-width="2"/><rect x="26" y="56" width="80" height="10" rx="5" fill="#fff" stroke="#bbb" stroke-width="2"/><path d="M44 116 L86 116 L65 130Z" fill="#2e9d4f"/>` + mic;
+}
+function hostOn(){ hostOnFlag = true; $("hostSvg").innerHTML = hostArt(); $("host").style.display = ""; $("hostBubble").style.display = "none"; }
+function hostOff(){ hostOnFlag = false; clearTimeout(hostTm); $("host").style.display = "none"; $("host").classList.remove("talk"); }
+function hostSpeak(text){ clearTimeout(hostTm); $("hostBubble").textContent = text; $("hostBubble").style.display = "block"; $("host").classList.add("talk"); }
+function hostQuiet(){ $("host").classList.remove("talk"); clearTimeout(hostTm); hostTm = setTimeout(() => { $("hostBubble").style.display = "none"; }, 2200); }
+
+const SETTING = {
+  christmas:["The going at the North Pole today is soft, with a fresh dusting of snow, and a very slight chance of elves.","It's a crisp, frosty afternoon, the snow is deep, and the sleigh bells are ringing!"],
+  halloween:["It's a foggy night at the old graveyard, the going is soft, and the swamp is looking suspiciously lively.","The moon is full, the ground is spooky, and the swamp has been very hungry this season!"],
+  pigs:["It's a gloriously muddy day on the farm, and the going is heavy, which is just how a pig likes it!","The sun is out, the mud is deep, and the whole farmyard is buzzing!"]
+};
+const joinNames = a => a.length < 2 ? a.join("") : a.slice(0,-1).join(", ") + " and " + a[a.length-1];
+function rundown(){                                   // the commentator's race preview
+  const L = [], fav = field[0], s2 = field[1], out = field[5];
+  L.push(PH(SETTING[theme.id]));
+  L.push(`The market has ${fav.n} as the favourite at ${oddsSay(fav.odds)}, with ${s2.n} next at ${oddsSay(s2.odds)}. And at the back of the market, it's ${out.n} at ${oddsSay(out.odds)}.`);
+  if(night){
+    const last = f => (night.form[f.n] || []).slice(-1)[0], won = field.find(f => last(f) === "1st"), bad = field.find(f => last(f) === "DNF");
+    if(won) L.push(`${won.n} won last time out, so they'll be full of confidence!`);
+    if(bad) L.push(`${bad.n} didn't finish last time. Let's hope they put that right!`);
+    const by = {}; night.players.forEach(p => { const nm = night.picks[p]; if(nm) (by[nm] = by[nm] || []).push(p); });
+    const parts = Object.entries(by).map(([nm,ps]) => `${joinNames(ps)} ${ps.length > 1 ? "are" : "is"} on ${nm}`), sit = night.players.filter(p => !night.picks[p]);
+    if(parts.length) L.push(`And what about the bets? ${parts.join(", ")}${sit.length ? `, and ${joinNames(sit)} ${sit.length > 1 ? "are" : "is"} sitting this one out` : ""}.${night.players.some(p => night.ew[p]) ? " There are a few each-way bets in there too!" : ""}`);
+  }
+  L.push(`Out on the course there are four ${theme.jumpName}s and three ${theme.waterName}s, so not everyone is guaranteed to finish!`);
+  L.push(`And my tip? ${PH(field).n}. Pure hunch. Ignore me, I once tipped a lamp-post!`);
+  return L;
+}
 function gapSay(px){ const L = px/LEN; return L < .3 ? "by a nose" : L < .75 ? "by a head" : L < 1.5 ? "by a length" : L < 2.5 ? "by two lengths" : L < 3.5 ? "by three lengths" : "by a distance"; }
 function cmReset(){ cm = {half:false, jokeT:0, used:{}, lead:null, said:0, upd:0, n:0, snapT:0, snap:null, gapPrev:undefined, lastTxt:"", obst:{}, sign:{}, refused:false, sank:false, won:false, started:false}; }
 function commentary(t){                            // called every frame during a race
@@ -1205,12 +1263,22 @@ syncSfx();
 let night = null, pendingKey = null;
 const ordN = n => ["","1st","2nd","3rd","4th","5th","6th"][n] || n+"th";
 const oddsTxt = f => f.odds === 1 ? "evens" : f.odds + "/1";
-const money = (v, sign) => (sign ? (v >= 0 ? "+" : "−") : (v < 0 ? "−" : "")) + night.cur + Math.abs(v).toFixed(2);
+const num = v => Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0+$/,"").replace(/\.$/,"");
+const money = (v, sign) => { const sg = sign ? (v >= 0 ? "+" : "−") : (v < 0 ? "−" : ""), a = Math.abs(v); return night.pts ? `${sg}${num(a)} pts` : `${sg}${night.cur}${a.toFixed(2)}`; };
+const fracTxt = f => f === .25 ? "¼" : f === .2 ? "⅕" : String(f);
+function syncMode(){
+  const pts = $("ptsMode").checked, st = $("stake");
+  $("curLbl").style.display = pts ? "none" : ""; $("refundLbl").style.display = pts ? "none" : "";
+  $("stakeLbl").textContent = pts ? "Points per bet" : "Stake per bet"; st.step = pts ? 1 : .5;
+  if(pts && st.value === "1") st.value = "10"; if(!pts && st.value === "10") st.value = "1";
+  $("modeHint").textContent = pts ? "Points: a winning bet scores its stake × the odds. Losing bets score nothing, so nobody ever goes backwards." : "Money: a winning bet pays its stake × the odds. Losing bets lose their stake.";
+}
+$("ptsMode").onchange = syncMode;
 const esc2 = t => String(t).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function openSetup(key){
   pendingKey = key; $("setupTitle").textContent = THEMES[key].label; $("setupErr").textContent = "";
-  try{ $("plist").value = localStorage.getItem("vr_players") || ""; $("stake").value = localStorage.getItem("vr_stake") || "1"; $("cur").value = localStorage.getItem("vr_cur") || "£"; $("refund").checked = localStorage.getItem("vr_refund") === "1"; }catch(e){}
-  show("setup");
+  try{ $("plist").value = localStorage.getItem("vr_players") || ""; $("stake").value = localStorage.getItem("vr_stake") || "1"; $("cur").value = localStorage.getItem("vr_cur") || "£"; $("refund").checked = localStorage.getItem("vr_refund") === "1"; $("ptsMode").checked = localStorage.getItem("vr_pts") === "1"; $("ewDef").checked = localStorage.getItem("vr_ew") === "1"; $("places").value = localStorage.getItem("vr_places") || "2:0.25"; }catch(e){}
+  syncMode(); show("setup");
 }
 $("goPlain").onclick = () => { night = null; audio(); openRace(pendingKey); };
 $("setupBack").onclick = () => show("menu");
@@ -1218,15 +1286,15 @@ $("goNight").onclick = () => {
   const players = [...new Set($("plist").value.split(/[\n,]+/).map(x => x.trim()).filter(Boolean))].slice(0,16);
   if(!players.length){ $("setupErr").textContent = "Add at least one player, or choose Race without betting."; return; }
   audio();
-  night = {players, stake:Math.max(0, parseFloat($("stake").value) || 0), cur:($("cur").value || "£").trim(), refund:$("refund").checked, picks:{}, totals:{}, form:{}, settled:0, rows:[]};
+  night = {players, stake:Math.max(0, parseFloat($("stake").value) || 0), cur:($("cur").value || "£").trim(), refund:$("refund").checked, pts:$("ptsMode").checked, ewDef:$("ewDef").checked, places:+$("places").value.split(":")[0], frac:+$("places").value.split(":")[1], ew:{}, picks:{}, totals:{}, form:{}, settled:0, rows:[]};
   players.forEach(p => night.totals[p] = 0);
-  try{ localStorage.setItem("vr_players", players.join("\n")); localStorage.setItem("vr_stake", night.stake); localStorage.setItem("vr_cur", night.cur); localStorage.setItem("vr_refund", night.refund ? "1" : "0"); }catch(e){}
+  try{ localStorage.setItem("vr_players", players.join("\n")); localStorage.setItem("vr_stake", night.stake); localStorage.setItem("vr_cur", night.cur); localStorage.setItem("vr_refund", night.refund ? "1" : "0"); localStorage.setItem("vr_pts", night.pts ? "1" : "0"); localStorage.setItem("vr_ew", night.ewDef ? "1" : "0"); localStorage.setItem("vr_places", $("places").value); }catch(e){}
   theme = THEMES[pendingKey]; theme.id = pendingKey; raceNo = 1; prepRace();
 };
 function prepRace(){ setTitle(); setup(); renderBets(); show("bets"); }
 function renderBets(){
   $("betsTitle").textContent = `Race ${raceNo} of ${EVENT_RACES}`;
-  $("betsSub").textContent = `${theme.label} · stake ${money(night.stake)} each · meet the runners and place your bets`;
+  $("betsSub").textContent = `${theme.label} · ${night.pts ? "points per bet" : "stake"} ${money(night.stake)} · each-way = win + place bet, pays top ${night.places} at ${fracTxt(night.frac)} odds · place your bets`;
   const w = field.map(f => 1/(f.odds+1)), tot = w.reduce((a,b) => a+b, 0), g = $("runnerGrid"); g.innerHTML = "";
   field.forEach((f,i) => {
     const card = document.createElement("div"); card.className = "rcard", cv2 = portrait(f); cv2.className = "rport"; card.appendChild(cv2);
@@ -1239,16 +1307,17 @@ function renderBets(){
     const row = document.createElement("div"), sel = document.createElement("select"); row.className = "betrow"; sel.dataset.p = p;
     sel.innerHTML = `<option value="">Sitting out</option>` + field.map(f => `<option value="${esc2(f.n)}">#${f.lane+1} ${esc2(f.n)} · ${oddsTxt(f)}</option>`).join("");
     sel.value = night.picks[p] && field.some(f => f.n === night.picks[p]) ? night.picks[p] : "";
-    sel.onchange = updBackers; row.innerHTML = `<b>${esc2(p)}</b>`; row.appendChild(sel); t.appendChild(row);
+    sel.onchange = updBackers; const cb = document.createElement("input"), lab = document.createElement("label"); cb.type = "checkbox"; cb.dataset.p = p; cb.checked = p in night.ew ? night.ew[p] : night.ewDef; cb.onchange = updBackers; lab.className = "ewbox"; lab.appendChild(cb); lab.appendChild(document.createTextNode("E/W"));
+    row.innerHTML = `<b>${esc2(p)}</b>`; row.appendChild(sel); row.appendChild(lab); t.appendChild(row);
   });
   updBackers();
 }
 function updBackers(){
-  const by = {}; document.querySelectorAll("#betTable select").forEach(x => { if(x.value) (by[x.value] = by[x.value] || []).push(x.dataset.p); });
+  const by = {}; document.querySelectorAll("#betTable .betrow").forEach(r => { const x = r.querySelector("select"), c = r.querySelector("input"); if(x.value) (by[x.value] = by[x.value] || []).push(x.dataset.p + (c.checked ? " (E/W)" : "")); });
   field.forEach((f,i) => { const e = $("bk"+i); if(e) e.textContent = by[f.n] ? "Backed by " + by[f.n].join(", ") : "No backers"; });
 }
 $("lock").onclick = () => {
-  document.querySelectorAll("#betTable select").forEach(x => { night.picks[x.dataset.p] = x.value; });
+  document.querySelectorAll("#betTable .betrow").forEach(r => { const x = r.querySelector("select"), c = r.querySelector("input"); night.picks[x.dataset.p] = x.value; night.ew[x.dataset.p] = c.checked; });
   audio(); racing = false; show("race"); setTitle(); $("res").textContent = ""; $("start").style.display = "none"; $("start").disabled = false; fit(); begin(true);
 };
 function settle(){
@@ -1256,10 +1325,12 @@ function settle(){
   const pos = {}; field.forEach(f => pos[f.n] = finished.indexOf(f) + 1);                 // 0 = did not finish
   night.rows = night.players.map(p => {
     const nm = night.picks[p]; if(!nm) return {p, none:true};
-    const f = field.find(x => x.n === nm), r = pos[nm], win = r === 1;
-    let net = win ? night.stake*f.odds : -night.stake, note = win ? "Won!" : r ? ordN(r) : (f.fellT !== undefined ? "Sank" : "Refused");
-    if(!r && night.refund){ net = 0; note += " · refunded"; }
-    night.totals[p] += net; return {p, nm, f, note, net};
+    const f = field.find(x => x.n === nm), r = pos[nm], ew = !!night.ew[p], st = night.stake, lose = night.pts ? 0 : -st;
+    const placed = r >= 1 && r <= night.places;
+    let net = (r === 1 ? st*f.odds : lose) + (ew ? (placed ? st*f.odds*night.frac : lose) : 0);      // win part + (each-way) place part
+    let note = r === 1 ? "Won!" : r ? ordN(r) + (ew && placed ? " (placed)" : "") : (f.fellT !== undefined ? "Sank" : "Refused");
+    if(!r && night.refund && !night.pts){ net = 0; note += " · refunded"; }
+    night.totals[p] += net; return {p, nm, f, note, net, ew};
   });
   field.forEach(f => { (night.form[f.n] = night.form[f.n] || []).push(pos[f.n] ? ordN(pos[f.n]) : "DNF"); });
 }
@@ -1272,7 +1343,7 @@ function showPayouts(){
   $("payTitle").textContent = `Race ${raceNo} of ${EVENT_RACES} · payouts`;
   $("payMsg").textContent = raceNo >= EVENT_RACES ? "That was the last race! Update your sheets and pay your winnings, then see who is the champion." : "Update your sheets, pay your winnings and when you are ready start the next race.";
   $("payRace").innerHTML = `<p class="pwin">🏆 ${esc2(win.n)} won at ${oddsTxt(win)}${mishaps() ? "<br>" + esc2(mishaps("   ·   ")) : ""}</p><table class="tbl"><tr><th>Player</th><th>Backed</th><th>Result</th><th>Winnings</th></tr>` +
-    night.rows.map(r => r.none ? `<tr><td>${esc2(r.p)}</td><td colspan="3" class="dim">Sat out</td></tr>` : `<tr><td>${esc2(r.p)}</td><td>#${r.f.lane+1} ${esc2(r.nm)} (${oddsTxt(r.f)})</td><td>${r.note}</td><td class="${r.net < 0 ? "neg" : "pos"}">${money(r.net,true)}</td></tr>`).join("") + `</table>`;
+    night.rows.map(r => r.none ? `<tr><td>${esc2(r.p)}</td><td colspan="3" class="dim">Sat out</td></tr>` : `<tr><td>${esc2(r.p)}</td><td>#${r.f.lane+1} ${esc2(r.nm)} (${oddsTxt(r.f)})${r.ew ? " · each-way" : ""}</td><td>${r.note}</td><td class="${r.net < 0 ? "neg" : "pos"}">${money(r.net,true)}</td></tr>`).join("") + `</table>`;
   $("payStand").innerHTML = standingsHTML();
   $("payNext").textContent = raceNo >= EVENT_RACES ? "FINISH THE NIGHT 🏆" : "NEXT RACE ▶";
   show("pay");
