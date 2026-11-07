@@ -228,12 +228,12 @@ const THEMES = {
     label: "🐷 Pig Race - Muddy Farmyard", cls: "farm", scene: sceneFarm, post: postFarm, obst: obstFarm, jumpName: "fence", waterName: "muddy puddle", say: "the muddy farmyard pig race", runner: pig, acc: "#8b5a2b",
     puff: ["#6a4528","rgba(35,20,8,.6)"], hues: [335,25,50,110],
     runners: [
-      {n:"Wilbur",k:"pig",m:"plain",c:"#f6a6b8",ring:"#2a6fd6"},
-      {n:"Truffles",k:"pig",m:"spots",c:"#f4aab9",m1:"#2a2a30",ring:"#d32f2f"},
+      {n:"Wilbur",k:"pig",m:"plain",c:"#f5b4a2",ring:"#2a6fd6"},
+      {n:"Truffles",k:"pig",m:"spots",c:"#f4b6a6",m1:"#2a2a30",ring:"#d32f2f"},
       {n:"Hamlet",k:"pig",m:"brown",c:"#f7efe6",m1:"#8b5a33",sn:"#e99aa8",ring:"#2e9d4f"},
       {n:"Pickles",k:"pig",m:"saddle",c:"#2d2a33",m1:"#f6ecef",sn:"#e0909f",ring:"#8a3fd6"},
       {n:"Snorty",k:"pig",m:"ginger",c:"#d9772e",sn:"#e8a07a",ring:"#e0b020"},
-      {n:"Porkchop",k:"pig",m:"patch",c:"#f4b4c0",m1:"#2a2a30",ring:"#e83e8c"}
+      {n:"Porkchop",k:"pig",m:"patch",c:"#f5baa9",m1:"#2a2a30",ring:"#e83e8c"}
     ]
   }
 };
@@ -423,7 +423,7 @@ function tick(now){
 function portrait(f){                       // reuse deer() to paint a close-up
   const c = document.createElement("canvas"); c.width = 420; c.height = 430;
   const real = ctx; ctx = c.getContext("2d"); noLabel = true;
-  const pg = f.k === "pig", sc = pg ? 2.45 : 2.3; ctx.scale(sc,sc); (theme.runner || deer)({...f,mv:false,ph:0}, pg ? 64 : f.k ? 91 : 76, pg ? 89 : f.k ? 101 : 112, 0);
+  const pg = f.k === "pig", sc = pg ? 2.4 : 2.3; ctx.scale(sc,sc); (theme.runner || deer)({...f,mv:false,ph:0}, pg ? 70 : f.k ? 91 : 76, pg ? 94 : f.k ? 101 : 112, 0);
   ctx = real; noLabel = false; return c;
 }
 function showFinish(){
@@ -822,63 +822,62 @@ function sign(x,y,d,s){                      // round "metres to go" board on a 
   ctx.font = "bold 28px system-ui"; ctx.fillText(d,0,-91); ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
   ctx.restore();
 }
-function pig(f,x,y,t){                       // racing pig: natural body, big ears, happy open mouth, numbered saddle bib and leather harness
+function pig(f,x,y,t){                       // cute racing pig: plump 3D-cartoon body, big smile and eyes, perky ears, numbered saddle bib, leather harness
   const mv = f.mv, ph = f.ph || 0, c = f.c, [r0,g0,b0] = px(c), dark = r0*.3+g0*.59+b0*.11 < 90;
-  const ol = sh(c, dark ? .5 : .62), dk = sh(c,.82), flap = mv ? Math.sin(ph*2)*.32 : Math.sin(t*2+f.seed)*.06;
-  const snT = f.sn || "#ee8aa0", m = f.m, m1 = f.m1, ec = (m === "brown" || m === "patch") ? m1 : c, bib = f.ring || "#d32f2f";
+  const ol = sh(c, dark ? .5 : .76), dk = sh(c,.88), flap = mv ? Math.sin(ph*2)*.28 : Math.sin(t*2+f.seed)*.06;
+  const snT = f.sn || "#ee9aa2", m = f.m, m1 = f.m1, ec = (m === "brown" || m === "patch") ? m1 : c, bib = f.ring || "#d32f2f";
   ctx.save(); ctx.translate(x,y+8); ctx.scale(1.2,1.2);
   if(!f.air) E(0,47,54,6,0,"rgba(30,15,5,.32)");
   ctx.translate(0, mv ? -Math.abs(Math.sin(ph))*8 : Math.sin(t*2+f.seed)*.8);
-  if(mv){ const q = Math.sin(ph*2)*.03; ctx.scale(1+q,1-q); }
+  if(mv){ const q = Math.sin(ph*2)*.035; ctx.scale(1+q,1-q); }                                                           // squash and stretch
   ctx.rotate(mv ? Math.sin(ph)*.07 : 0);
-  const leg = (hx,p,col) => {                                                    // legs reach forward and push back in a proper gallop
-    const a1 = mv ? Math.sin(p)*1.15 : 0, [ex,ey] = limb(hx,15,12,12,a1,mv ? a1-1.0*(1+Math.sin(p+1.1)) : 0,9,6.5,col,ol);
-    B(ex+1.5,ey+1,5.2,3.2,0,"#3a2428"); ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ex+1.5,ey-1.5); ctx.lineTo(ex+1.5,ey+3.5); ctx.stroke();
+  const leg = (hx,p,col) => {                                                                                            // chunky legs with big glossy hooves
+    const a1 = mv ? Math.sin(p)*1.1 : 0, [ex,ey] = limb(hx,16,11,11,a1,mv ? a1-1.0*(1+Math.sin(p+1.1)) : 0,11,8.5,col,ol);
+    ctx.save(); ctx.translate(ex+3,ey+1); ctx.rotate(.15); B(0,0,7.5,4.4,0,"#2d1616"); E(-2,-1.6,3,1.2,0,"rgba(255,255,255,.35)"); ctx.restore();
   };
-  leg(18,ph+.5,dk); leg(-20,ph+3.3,dk);
-  ctx.save(); ctx.translate(-43,-8); ctx.rotate(Math.sin(ph*3)*(mv ? .35 : .06));                                     // curly tail
-  for(const [cc,w] of [[ol,4.8],[lt(c,.12),2.8]]){ ctx.strokeStyle = cc; ctx.lineWidth = w; ctx.lineCap = "round"; ctx.beginPath(); for(let q=0;q<=11;q+=.4){ const r = 1+q*.6; ctx[q ? "lineTo" : "moveTo"](-Math.cos(q)*r-2,-Math.sin(q)*r); } ctx.stroke(); }
+  leg(16,ph+.5,dk); leg(-24,ph+3.3,dk);
+  ctx.save(); ctx.translate(-41,-12); ctx.rotate(Math.sin(ph*3)*(mv ? .35 : .06));                                         // curly tail
+  for(const [cc,w] of [[ol,5.2],[lt(c,.1),3.2]]){ ctx.strokeStyle = cc; ctx.lineWidth = w; ctx.lineCap = "round"; ctx.beginPath(); for(let q=0;q<=11;q+=.4){ const r = 1+q*.62; ctx[q ? "lineTo" : "moveTo"](-Math.cos(q)*r-2,-Math.sin(q)*r); } ctx.stroke(); }
   ctx.restore();
-  const body = () => { ctx.beginPath(); ctx.moveTo(-42,2); ctx.bezierCurveTo(-44,-16,-26,-24,-6,-23); ctx.bezierCurveTo(14,-23,30,-24,40,-14); ctx.bezierCurveTo(48,-6,46,10,36,16); ctx.bezierCurveTo(24,22,6,22,-8,21); ctx.bezierCurveTo(-24,21,-40,18,-42,2); ctx.closePath(); };
-  let g = ctx.createLinearGradient(0,-24,0,23); g.addColorStop(0,lt(c,.28)); g.addColorStop(.5,c); g.addColorStop(1,sh(c,.7));
-  body(); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = ol; ctx.lineWidth = 1.8; ctx.stroke();
-  ctx.save(); body(); ctx.clip();                                                                                    // markings stay inside the body
-  E(0,18,42,8,0,lt(c,.22));
-  if(m === "spots") [[-26,-8,6],[-10,-15,5],[8,-6,7],[26,-12,5.5],[-16,8,5],[32,6,4.5],[0,13,4]].forEach(([qa,qb,r]) => E(qa,qb,r,r*.85,0,m1));
+  const ear = (dx,rot,col,sc) => { ctx.save(); ctx.translate(46+dx,-30); ctx.rotate(rot+flap); ctx.scale(sc,sc);
+    ctx.beginPath(); ctx.moveTo(-13,2); ctx.bezierCurveTo(-26,-12,-12,-30,10,-31); ctx.bezierCurveTo(24,-24,22,-8,13,2); ctx.closePath();
+    const g2 = ctx.createLinearGradient(-10,-40,10,2); g2.addColorStop(0,lt(col,.2)); g2.addColorStop(1,sh(col,.85)); ctx.fillStyle = g2; ctx.fill(); ctx.strokeStyle = ol; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-8,-1); ctx.bezierCurveTo(-17,-11,-7,-24,8,-25); ctx.bezierCurveTo(17,-19,16,-8,9,-1); ctx.closePath(); ctx.fillStyle = "#f59aa6"; ctx.fill(); ctx.restore(); };
+  ear(10,.7,dk,.9);                                                                                                           // far ear
+  const body = () => { ctx.beginPath(); ctx.moveTo(-40,0); ctx.bezierCurveTo(-42,-22,-22,-28,0,-27); ctx.bezierCurveTo(22,-27,38,-22,42,-8); ctx.bezierCurveTo(46,6,38,22,20,25); ctx.bezierCurveTo(2,28,-22,27,-34,20); ctx.bezierCurveTo(-42,14,-42,6,-40,0); ctx.closePath(); };
+  let g = ctx.createRadialGradient(-8,-16,4,0,0,52); g.addColorStop(0,lt(c,.4)); g.addColorStop(.55,c); g.addColorStop(1,sh(c,.7));
+  body(); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = ol; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.save(); body(); ctx.clip();                                                                                            // markings stay inside the body
+  E(2,20,40,9,0,lt(c,.22));
+  if(m === "spots") [[-26,-8,6],[-10,-15,5],[8,-6,7],[26,-12,5.5],[-16,8,5],[32,6,4.5],[0,14,4]].forEach(([qa,qb,r]) => E(qa,qb,r,r*.85,0,m1));
   if(m === "brown"){ E(-28,-4,19,17,0,m1); E(12,-12,11,8,.3,m1); }
-  if(m === "saddle"){ ctx.fillStyle = m1; ctx.fillRect(14,-32,15,64); }
+  if(m === "saddle"){ ctx.fillStyle = m1; ctx.fillRect(14,-32,16,64); }
   if(m === "ginger") [[-24,-8],[-8,-12],[10,-6],[28,-10],[-14,8],[20,8],[2,2]].forEach(([qa,qb]) => E(qa,qb,2.2,2.2,0,sh(c,.78)));
   if(m === "patch"){ E(-28,-6,18,16,0,m1); E(18,-13,11,7,.4,m1); }
-  E(-16,-19,17,4.5,-.08,"rgba(255,255,255,.3)");
+  E(-14,-21,18,4.5,-.08,"rgba(255,255,255,.4)");
   ctx.restore();
-  ctx.strokeStyle = "#4a2a16"; ctx.lineWidth = 3.4; ctx.lineCap = "round"; ctx.beginPath();                          // leather harness straps
-  ctx.moveTo(10,-8); ctx.quadraticCurveTo(28,-2,33,14); ctx.moveTo(0,-4); ctx.quadraticCurveTo(5,10,3,21); ctx.moveTo(-18,-8); ctx.quadraticCurveTo(-26,6,-27,19); ctx.stroke();
-  for(const [bx,by] of [[27,3],[3,10],[-25,8]]){ ctx.fillStyle = "#e3b94c"; ctx.strokeStyle = "#7a5a14"; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(bx-3,by-3,6,6,1.5); ctx.fill(); ctx.stroke(); }
-  g = ctx.createLinearGradient(0,-28,0,0); g.addColorStop(0,lt(bib,.22)); g.addColorStop(1,sh(bib,.72));                // numbered saddle bib
-  ctx.fillStyle = g; ctx.strokeStyle = "#f3c34a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(-24,-27,38,29,6); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = "rgba(0,0,0,.2)"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-18,-3); ctx.quadraticCurveTo(-5,1,10,-3); ctx.stroke();
-  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(-5,-13,9.5,0,7); ctx.fill(); ctx.strokeStyle = "#222"; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.fillStyle = "#222"; ctx.font = "bold 14px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(f.lane+1,-5,-12.5); ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
-  leg(30,ph,c); leg(-30,ph+2.7,c);
-  ctx.translate(0, mv ? Math.sin(ph*2+1)*2 : Math.sin(t*1.5+f.seed));                                                 // head bobs as it runs
-  const ear = (dx,col,sc) => { ctx.save(); ctx.translate(46+dx,-21); ctx.rotate(-.18+flap); ctx.scale(sc,sc); ctx.beginPath(); ctx.moveTo(-4,0); ctx.bezierCurveTo(-9,-21,10,-30,22,-19); ctx.bezierCurveTo(17,-11,9,-4,4,1); ctx.closePath();
-    ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = ol; ctx.lineWidth = 1.8; ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-1,-3); ctx.bezierCurveTo(-3,-16,8,-21,16,-17); ctx.bezierCurveTo(12,-11,6,-6,2,-2); ctx.closePath(); ctx.fillStyle = "#f4a6b6"; ctx.fill(); ctx.restore(); };
-  ear(-9,dk,.9);                                                                                                       // far ear
-  ctx.beginPath(); ctx.moveTo(34,-12); ctx.bezierCurveTo(36,-26,56,-30,64,-19); ctx.bezierCurveTo(70,-12,70,-3,65,3); ctx.bezierCurveTo(57,11,43,10,37,4); ctx.bezierCurveTo(31,-2,31,-8,34,-12); ctx.closePath();   // head
-  g = ctx.createLinearGradient(0,-28,0,12); g.addColorStop(0,lt(c,.25)); g.addColorStop(1,sh(c,.8)); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = ol; ctx.lineWidth = 1.8; ctx.stroke();
-  if(m === "spots"){ E(44,-14,5,4.5,0,m1); E(58,-21,3.2,3,0,m1); } if(m === "patch") E(46,-12,10,9,0,m1);
-  ctx.beginPath(); ctx.ellipse(70,-3,11,8.5,.1,0,7); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = ol; ctx.stroke();                                // snout
-  ctx.beginPath(); ctx.ellipse(79,-3,4.5,7.5,0,0,7); g = ctx.createLinearGradient(0,-10,0,5); g.addColorStop(0,lt(snT,.2)); g.addColorStop(1,sh(snT,.82)); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = ol; ctx.stroke();
-  E(80,-6,1.5,2.6,0,sh(snT,.35)); E(80,0,1.5,2.6,0,sh(snT,.35));
-  E(53,4,6.5,4,0,"rgba(255,110,140,.35)");
-  ctx.beginPath(); ctx.moveTo(60,4); ctx.quadraticCurveTo(68,17,80,6); ctx.quadraticCurveTo(70,8,60,4); ctx.fillStyle = "#8e2a3a"; ctx.fill(); ctx.strokeStyle = ol; ctx.lineWidth = 1.5; ctx.stroke();      // happy open mouth
-  E(70,11,5,2.4,0,"#ff7d98");
-  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(64,5); ctx.lineTo(66,9); ctx.lineTo(68,5.6); ctx.fill();
-  if(dark) E(55,-10,4.4,4.8,0,"#fff");
-  E(55.5,-10,dark ? 2.6 : 3.2,dark ? 3 : 3.8,0,"#2a1218"); E(56.6,-11.6,1.1,1.1,0,"#fff");                                                 // eye
-  ctx.strokeStyle = ol; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(49,-16.5); ctx.quadraticCurveTo(55,-19.5,60,-15.5); ctx.stroke();
-  ear(0,ec,1);                                                                                                       // near ear
+  ctx.lineCap = "round"; ctx.lineJoin = "round";                                                                              // black leather harness with gold buckles
+  const strap = (pts,w) => { ctx.strokeStyle = "#241410"; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(pts[0],pts[1]); ctx.quadraticCurveTo(pts[2],pts[3],pts[4],pts[5]); ctx.stroke(); ctx.strokeStyle = "rgba(255,255,255,.12)"; ctx.lineWidth = 1; ctx.stroke(); };
+  strap([-8,-6,-6,12,-4,26],4.6); strap([10,-6,14,12,12,26],4.6); strap([24,-24,34,-2,44,8],4.4); strap([22,-20,32,-26,40,-30],3.6);
+  for(const [bx,by] of [[-5,12],[13,12],[34,0],[30,-24]]){ ctx.fillStyle = "#e8bf55"; ctx.strokeStyle = "#7a5a14"; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(bx-4,by-3.6,8,7.2,1.5); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#241410"; ctx.fillRect(bx-1.4,by-1.4,2.8,2.8); }
+  g = ctx.createLinearGradient(0,-34,0,0); g.addColorStop(0,lt(bib,.25)); g.addColorStop(1,sh(bib,.7));                         // red numbered saddle bib
+  ctx.fillStyle = g; ctx.strokeStyle = "#f3c34a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(-26,-34,44,34,7); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,.25)"; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(-22,-30); ctx.quadraticCurveTo(-4,-34,14,-30); ctx.stroke();
+  ctx.fillStyle = "#fff"; ctx.font = "900 26px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(f.lane+1,-4,-16); ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+  leg(30,ph,c); leg(-34,ph+2.7,c);
+  ctx.translate(0, mv ? Math.sin(ph*2+1)*2 : Math.sin(t*1.5+f.seed));                                                         // head bobs as it runs
+  g = ctx.createRadialGradient(46,-24,3,50,-12,30); g.addColorStop(0,lt(c,.4)); g.addColorStop(.6,c); g.addColorStop(1,sh(c,.78));
+  ctx.beginPath(); ctx.ellipse(51,-12,25,22,.1,0,7); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = ol; ctx.lineWidth = 1.5; ctx.stroke();      // big round head
+  if(m === "spots"){ E(44,-20,5,4.5,0,m1); E(58,-26,3.2,3,0,m1); } if(m === "patch") E(44,-20,11,9,0,m1);
+  E(54,0,9,5.5,0,"rgba(255,110,130,.4)");                                                                                    // rosy cheek
+  ctx.beginPath(); ctx.ellipse(73,-8,10.5,8.8,.15,0,7); g = ctx.createLinearGradient(0,-16,0,0); g.addColorStop(0,lt(snT,.25)); g.addColorStop(1,sh(snT,.85)); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = sh(snT,.65); ctx.lineWidth = 1.4; ctx.stroke();   // snout
+  E(77,-9.5,2.1,3.2,.2,sh(snT,.35)); E(70,-8.5,2.1,3.2,.2,sh(snT,.35));
+  ctx.beginPath(); ctx.moveTo(61,1); ctx.quadraticCurveTo(66,19,82,3); ctx.quadraticCurveTo(70,9,61,1); ctx.fillStyle = "#8e2a3a"; ctx.fill(); ctx.strokeStyle = sh(c,.6); ctx.lineWidth = 1.6; ctx.stroke();   // huge happy smile
+  E(71,11,6.5,3.2,0,"#ff7d98");
+  ctx.beginPath(); ctx.ellipse(57,-17,7,8.2,.1,0,7); ctx.fillStyle = "#fff"; ctx.fill(); ctx.strokeStyle = sh(c,.6); ctx.lineWidth = 1.2; ctx.stroke();       // big eye
+  E(59.6,-16.4,4,5.2,0,"#2a1410"); E(60.9,-18.6,1.7,1.7,0,"#fff"); E(58.6,-14,.9,.9,0,"#fff");
+  ctx.strokeStyle = sh(c,.55); ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(48,-28); ctx.quadraticCurveTo(57,-35,66,-27); ctx.stroke();                         // arched brow
+  ear(-6,-.75,ec,1.05);                                                                                                      // near ear
   ctx.restore();
 }
 function bubble(x,y,txt){
